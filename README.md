@@ -24,9 +24,10 @@ No SDK, no changes to the iOS app. If it already logs with `os.Logger`, LogLens 
 
 ## Install
 
-Grab `LogLens-x.y.z.zip` from the [latest release](https://github.com/HugoPrinsloo/LogLens/releases), unzip it, and drop `LogLens.app` in your Applications folder. The app is signed with a Developer ID and notarized, so it opens without any Gatekeeper warning.
+1. Download the latest `.dmg` from [Releases](https://github.com/HugoPrinsloo/LogLens/releases/latest).
+2. Open it and drag LogLens to Applications.
 
-You need macOS 15 or later. To watch simulators you also need Xcode installed, because LogLens finds simulators and streams their logs through `xcrun simctl`. Watching this Mac's own logs works without Xcode.
+The app is signed with a Developer ID and notarized by Apple, so it opens like any other Mac app. You need macOS 15 or later. To watch simulators you also need Xcode installed, because LogLens finds simulators and streams their logs through `xcrun simctl`. Watching this Mac's own logs works without Xcode.
 
 ### Build it yourself
 
@@ -117,12 +118,11 @@ Not yet. Xcode 27's `devicectl` can list a paired iPhone but has no command for 
 
 ## Releasing
 
-This is mostly a note to myself. One time:
+Mostly a note to myself. Signing uses Xcode's cloud-managed Developer ID certificate for my team, so the only one-time setup is storing notarization credentials in the keychain (app-specific password from account.apple.com):
 
-1. Create a "Developer ID Application" certificate (Xcode > Settings > Accounts > Manage Certificates).
-2. Store notarization credentials, using an app-specific password from appleid.apple.com:
-   `xcrun notarytool store-credentials LogLens --apple-id you@example.com --team-id 7VT5H6VPXH`
-3. Have the `gh` CLI logged in with push access.
+```
+xcrun notarytool store-credentials "LogLens-Notary" --apple-id you@example.com --team-id 7VT5H6VPXH
+```
 
 Then, from a clean working tree:
 
@@ -130,7 +130,7 @@ Then, from a clean working tree:
 scripts/release.sh 1.2.0
 ```
 
-That bumps the version in `project.yml`, archives a Release build, exports it with the Developer ID, submits it to Apple for notarization, staples the ticket, zips the app, commits the bump, and creates a GitHub release with the zip and its SHA-256 attached.
+That sets the version in `project.yml`, archives a Release build, exports it with the Developer ID, notarizes and staples the app, wraps it in a `.dmg` (notarized too), commits the bump, and publishes a GitHub release with the dmg, a zip, and their SHA-256s. Add `--no-publish` to stop after building.
 
 ## Project layout
 
@@ -146,7 +146,7 @@ LogLens/
   Resources/  AppIcon.icon (Liquid Glass layers) and the PNG fallback catalog
 scripts/
   make-icon.swift      renders the PNG icon set from the .icon layers
-  release.sh           build, notarize, publish
+  release.sh           build, sign, notarize, publish (dmg + zip)
 ```
 
 ## License

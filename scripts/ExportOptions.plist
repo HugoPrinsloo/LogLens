@@ -7,9 +7,7 @@
 	<key>teamID</key>
 	<string>7VT5H6VPXH</string>
 	<key>signingStyle</key>
-	<string>manual</string>
-	<key>signingCertificate</key>
-	<string>Developer ID Application</string>
+	<string>automatic</string>
 	<key>destination</key>
 	<string>export</string>
 </dict>

@@ -1,64 +1,110 @@
-#!/bin/bash
-# Builds, signs, notarizes and publishes a LogLens release.
+#!/bin/zsh
+# Builds a Developer ID-signed, notarized, stapled LogLens release (zip + dmg) and publishes it on GitHub.
 #
-#   scripts/release.sh 1.2.0
+# Usage: scripts/release.sh <version>              e.g. scripts/release.sh 1.2.0
+#        scripts/release.sh <version> --no-publish  build and notarize only
 #
-# One-time setup:
-#   1. A "Developer ID Application" certificate in your keychain
-#      (Xcode > Settings > Accounts > Manage Certificates, or developer.apple.com).
-#   2. Notarization credentials stored in the keychain:
-#      xcrun notarytool store-credentials LogLens --apple-id you@example.com --team-id 7VT5H6VPXH
-#      (use an app-specific password from appleid.apple.com)
-#   3. gh CLI logged in with push access to the repo.
+# Signing uses Xcode's cloud-managed Developer ID certificate for team 7VT5H6VPXH
+# (-allowProvisioningUpdates), so nothing has to be installed in the local keychain.
+# Notarization credentials are read from the keychain profile below. Create them once with:
+#   xcrun notarytool store-credentials "LogLens-Notary" --apple-id <you@example.com> --team-id 7VT5H6VPXH
 set -euo pipefail
-
-VERSION="${1:?usage: scripts/release.sh <version>   e.g. 1.2.0}"
-PROFILE="${NOTARY_PROFILE:-LogLens}"
 cd "$(dirname "$0")/.."
 
-if ! security find-identity -v -p codesigning | grep -q "Developer ID Application"; then
-  echo "No 'Developer ID Application' certificate found in your keychain." >&2
-  echo "Create one in Xcode > Settings > Accounts > Manage Certificates, then run this again." >&2
+VERSION="${1:?usage: scripts/release.sh <version> [--no-publish]}"
+PUBLISH="${2:-}"
+PROJECT="LogLens.xcodeproj"
+SCHEME="LogLens"
+APP_NAME="LogLens.app"
+BUILD_NUMBER="$(date +%Y%m%d%H%M%S)"
+ARCHIVE="build/LogLens.xcarchive"
+EXPORT_DIR="build/export"
+DIST_DIR="dist"
+APP="$EXPORT_DIR/$APP_NAME"
+DMG="$DIST_DIR/LogLens-$VERSION.dmg"
+ZIP="$DIST_DIR/LogLens-$VERSION.zip"
+
+step() { echo "\n▸ $*"; }
+
+command -v xcodegen >/dev/null 2>&1 || { echo "xcodegen is required: brew install xcodegen" >&2; exit 1; }
+
+# Use the first notarization profile that exists (shared personal-team credentials).
+NOTARY_PROFILE="${NOTARY_PROFILE:-}"
+if [[ -z "$NOTARY_PROFILE" ]]; then
+  for candidate in LogLens-Notary NetworkBlocker-Notary; do
+    if xcrun notarytool history --keychain-profile "$candidate" >/dev/null 2>&1; then NOTARY_PROFILE="$candidate"; break; fi
+  done
+fi
+if [[ -z "$NOTARY_PROFILE" ]]; then
+  cat >&2 <<MSG
+No notarization credentials found in the keychain. Create them once (needs an app-specific
+password from https://account.apple.com):
+  xcrun notarytool store-credentials "LogLens-Notary" --apple-id <your Apple ID email> --team-id 7VT5H6VPXH
+MSG
   exit 1
 fi
-if [ -n "$(git status --porcelain)" ]; then
+
+if [[ -n "$(git status --porcelain)" ]]; then
   echo "Working tree has uncommitted changes. Commit or stash them first." >&2
   exit 1
 fi
 
-DIST=dist
-rm -rf "$DIST"; mkdir -p "$DIST"
-BUILD_NUMBER="$(git rev-list --count HEAD)"
-
-echo "==> Bumping version to $VERSION (build $BUILD_NUMBER)"
+step "Setting version $VERSION in project.yml"
 sed -i '' "s/MARKETING_VERSION: \".*\"/MARKETING_VERSION: \"$VERSION\"/" project.yml
-sed -i '' "s/CURRENT_PROJECT_VERSION: \".*\"/CURRENT_PROJECT_VERSION: \"$BUILD_NUMBER\"/" project.yml
-xcodegen generate
+xcodegen generate --quiet
 
-echo "==> Archiving"
-xcodebuild -project LogLens.xcodeproj -scheme LogLens -configuration Release \
-  -archivePath "$DIST/LogLens.xcarchive" archive -quiet
+step "Archiving $VERSION (build $BUILD_NUMBER)"
+rm -rf "$ARCHIVE" "$EXPORT_DIR"
+mkdir -p build "$DIST_DIR"
+xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+  -archivePath "$ARCHIVE" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+  -allowProvisioningUpdates archive > build/archive.log 2>&1 \
+  || { grep -E "error:" build/archive.log | sort -u; echo "Archive failed - see build/archive.log" >&2; exit 1; }
 
-echo "==> Exporting with Developer ID"
-xcodebuild -exportArchive -archivePath "$DIST/LogLens.xcarchive" \
-  -exportOptionsPlist scripts/ExportOptions.plist -exportPath "$DIST/export" -quiet
-APP="$DIST/export/LogLens.app"
+step "Exporting with Developer ID signing"
+xcodebuild -exportArchive -archivePath "$ARCHIVE" \
+  -exportOptionsPlist scripts/ExportOptions.plist -exportPath "$EXPORT_DIR" \
+  -allowProvisioningUpdates > build/export.log 2>&1 \
+  || { grep -E "error" build/export.log | sort -u; echo "Export failed - see build/export.log" >&2; exit 1; }
+codesign -dvv "$APP" 2>&1 | grep -q "^Authority=Developer ID Application" \
+  || { echo "Exported app is not Developer ID signed" >&2; exit 1; }
 
-ZIP="$DIST/LogLens-$VERSION.zip"
-echo "==> Notarizing (this usually takes a few minutes)"
+step "Notarizing the app (profile: $NOTARY_PROFILE)"
+rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
-xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --wait
+xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$APP"
-rm "$ZIP"
-ditto -c -k --keepParent "$APP" "$ZIP"      # re-zip with the ticket stapled
-spctl -a -vv "$APP"
-(cd "$DIST" && shasum -a 256 "LogLens-$VERSION.zip" > "LogLens-$VERSION.zip.sha256")
+rm -f "$ZIP"
+ditto -c -k --keepParent "$APP" "$ZIP"   # re-zip so the zip contains the stapled app
 
-echo "==> Committing version bump and publishing GitHub release"
+step "Creating disk image"
+rm -f "$DMG"
+STAGING="build/dmg"
+rm -rf "$STAGING"; mkdir -p "$STAGING"
+ditto "$APP" "$STAGING/$APP_NAME"
+ln -s /Applications "$STAGING/Applications"
+hdiutil create -volname "LogLens" -srcfolder "$STAGING" -ov -format UDZO "$DMG" >/dev/null
+rm -rf "$STAGING"
+
+step "Notarizing the disk image"
+xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$DMG"
+
+step "Verifying"
+spctl -a -vv "$APP" 2>&1 | tail -2
+xcrun stapler validate "$DMG" | tail -1
+(cd "$DIST_DIR" && shasum -a 256 "LogLens-$VERSION.dmg" "LogLens-$VERSION.zip" | tee "LogLens-$VERSION.sha256")
+
+if [[ "$PUBLISH" == "--no-publish" ]]; then
+  echo "\n✓ Release $VERSION built (not published):\n   $DMG\n   $ZIP"
+  exit 0
+fi
+
+step "Committing version bump and publishing GitHub release v$VERSION"
 git add project.yml LogLens.xcodeproj
-git commit -m "Release v$VERSION" -q
-git push
-gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" --title "LogLens $VERSION" --generate-notes
+git commit -qm "Release v$VERSION" || true
+git push -q
+gh release create "v$VERSION" "$DMG" "$ZIP" "$DIST_DIR/LogLens-$VERSION.sha256" \
+  --title "LogLens $VERSION" --generate-notes
 
-echo
-echo "Done: https://github.com/HugoPrinsloo/LogLens/releases/tag/v$VERSION"
+echo "\n✓ https://github.com/HugoPrinsloo/LogLens/releases/tag/v$VERSION"
