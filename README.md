@@ -6,7 +6,7 @@
 
 <p align="center">
   A Mac app for watching what your iOS app logs, live.<br>
-  <a href="https://github.com/HugoPrinsloo/LogLens/releases">Download</a> &middot;
+  <a href="https://github.com/HugoPrinsloo/LogLens/releases/latest">Download</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#using-it">Using it</a> &middot;
   <a href="#releasing">Releasing</a>
