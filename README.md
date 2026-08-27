@@ -6,7 +6,7 @@ A Mac app for watching what your iOS app logs, live. Pick a simulator, press Rec
 
 ## Why this exists
 
-Console.app can technically do this. In practice you spend the first ten minutes building a predicate to silence the system noise, the search lags behind the stream, and a multi-line message gets squashed into one row. I wanted something closer to Proxyman, but for log events: one window, only my app's output, and an inspector that understands the message instead of just showing it.
+Console.app can technically do this. In practice you spend the first ten minutes building a predicate to silence the system noise, the search lags behind the stream, and a multi-line message gets squashed into one row. I wanted something closer to Proxyman, but for log events. Just my app's output, with an inspector that understands the message instead of only showing it.
 
 No SDK, no changes to the iOS app. If it already logs with `os.Logger`, LogLens can see it.
 
@@ -97,7 +97,7 @@ xcrun simctl spawn <udid> log stream --style ndjson --level debug --type log --p
 
 and reads the JSON lines off stdout. Each line becomes a `LogEntry`, gets parsed, and lands in a ring buffer (100,000 entries by default, adjustable in Settings). Filtering is applied incrementally as entries arrive so the table stays responsive at a few thousand events per second.
 
-No network code, no telemetry, no accounts. The only things the app persists are four preferences. Exports are JSON files you save through the normal panel.
+There is no network code in the app and nothing phones home. The only things it persists are four preferences. Exports are JSON files you save through the normal panel.
 
 ## Physical devices
 
