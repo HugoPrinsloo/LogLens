@@ -6,7 +6,7 @@
 
 <p align="center">
   A Mac app for watching what your iOS app logs, live.<br>
-  <a href="https://github.com/HugoPrinsloo/LogLens/releases/latest">Download</a> &middot;
+  <a href="https://github.com/HugoPrinsloo/LogLens/releases">Download</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#using-it">Using it</a> &middot;
   <a href="#releasing">Releasing</a>
@@ -24,7 +24,7 @@ No SDK, no changes to the iOS app. If it already logs with `os.Logger`, LogLens 
 
 ## Install
 
-Grab `LogLens-x.y.z.zip` from the [latest release](https://github.com/HugoPrinsloo/LogLens/releases/latest), unzip it, and drop `LogLens.app` in your Applications folder. The app is signed with a Developer ID and notarized, so it opens without any Gatekeeper warning.
+Grab `LogLens-x.y.z.zip` from the [latest release](https://github.com/HugoPrinsloo/LogLens/releases), unzip it, and drop `LogLens.app` in your Applications folder. The app is signed with a Developer ID and notarized, so it opens without any Gatekeeper warning.
 
 You need macOS 15 or later. To watch simulators you also need Xcode installed, because LogLens finds simulators and streams their logs through `xcrun simctl`. Watching this Mac's own logs works without Xcode.
 
