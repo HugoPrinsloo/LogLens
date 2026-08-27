@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2B2B33"/><stop offset="0.2" stop-color="#4A4A54"/><stop offset="0.5" stop-color="#121216"/>
+      <stop offset="0.85" stop-color="#26262D"/><stop offset="1" stop-color="#3C3C45"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A5A66"/><stop offset="1" stop-color="#2A2A31"/></linearGradient>
+  </defs>
+  <path d="M272,280 L272,372 A240,84 0 0 0 752,372 L752,280 A240,84 0 0 0 272,280 Z" fill="url(#band)"/>
+  <ellipse cx="512" cy="280" rx="240" ry="84" fill="url(#top)"/>
+  <ellipse cx="512" cy="280" rx="205" ry="72" fill="#17171B"/>
+  <g stroke="#ffffff" stroke-opacity="0.10" stroke-width="6">
+    <line x1="320" y1="300" x2="320" y2="372"/><line x1="360" y1="330" x2="360" y2="400"/><line x1="410" y1="348" x2="410" y2="418"/>
+    <line x1="460" y1="358" x2="460" y2="428"/><line x1="512" y1="362" x2="512" y2="432"/><line x1="564" y1="358" x2="564" y2="428"/>
+    <line x1="614" y1="348" x2="614" y2="418"/><line x1="664" y1="330" x2="664" y2="400"/><line x1="704" y1="300" x2="704" y2="372"/>
+  </g>
+</svg>

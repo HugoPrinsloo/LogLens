@@ -1,0 +1,44 @@
+name: LogLens
+options:
+  bundleIdPrefix: com.hugoprinsloo
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  # xcodegen doesn't know Icon Composer bundles yet; fix the file type so actool compiles the Liquid Glass icon.
+  postGenCommand: sed -i '' 's/lastKnownFileType = wrapper.icon;/lastKnownFileType = folder.iconcomposer.icon;/' LogLens.xcodeproj/project.pbxproj
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Personal Apple Developer team (Hugo Prinsloo). Debug builds sign with "Apple Development";
+    # release builds are exported with "Developer ID Application" by scripts/release.sh.
+    DEVELOPMENT_TEAM: 7VT5H6VPXH
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+targets:
+  LogLens:
+    type: application
+    platform: macOS
+    sources:
+      - path: LogLens
+    info:
+      path: LogLens/Info.plist
+      properties:
+        CFBundleName: LogLens
+        CFBundleDisplayName: LogLens
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: "Copyright © 2026 Hugo Prinsloo. MIT License."
+        NSPrincipalClass: NSApplication
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hugoprinsloo.LogLens
+        ENABLE_APP_SANDBOX: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        COMBINE_HIDPI_IMAGES: YES

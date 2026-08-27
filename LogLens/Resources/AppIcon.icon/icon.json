@@ -1,0 +1,14 @@
+{
+  "fill" : { "solid" : "display-p3:0.16000,0.10000,0.50000,1.00000" },
+  "groups" : [
+    { "layers" : [ { "glass" : true, "hidden" : false, "image-name" : "lens.svg", "name" : "Lens", "opacity" : 1, "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] } } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.2 }, "specular" : true, "translucency" : { "enabled" : true, "value" : 0.25 } },
+    { "layers" : [ { "glass" : true, "hidden" : false, "image-name" : "cap.svg", "name" : "Cap", "opacity" : 1, "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] } } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.6 }, "specular" : true, "translucency" : { "enabled" : false, "value" : 0 } },
+    { "layers" : [ { "glass" : true, "hidden" : false, "image-name" : "body.svg", "name" : "Body", "opacity" : 1, "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] } } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.45 }, "specular" : true, "translucency" : { "enabled" : true, "value" : 0.7 } },
+    { "layers" : [ { "glass" : false, "hidden" : false, "image-name" : "backdrop.svg", "name" : "Backdrop", "opacity" : 1, "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] } } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0 }, "translucency" : { "enabled" : false, "value" : 0 } }
+  ],
+  "supported-platforms" : { "circles" : [ "watchOS" ], "squares" : "shared" }
+}
