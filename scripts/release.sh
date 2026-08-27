@@ -66,7 +66,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   -exportOptionsPlist scripts/ExportOptions.plist -exportPath "$EXPORT_DIR" \
   -allowProvisioningUpdates > build/export.log 2>&1 \
   || { grep -E "error" build/export.log | sort -u; echo "Export failed - see build/export.log" >&2; exit 1; }
-codesign -dvv "$APP" 2>&1 | grep -q "^Authority=Developer ID Application" \
+codesign -dvv "$APP" 2>&1 | grep "^Authority=Developer ID Application" >/dev/null \
   || { echo "Exported app is not Developer ID signed" >&2; exit 1; }
 
 step "Notarizing the app (profile: $NOTARY_PROFILE)"
