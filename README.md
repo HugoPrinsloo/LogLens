@@ -1,6 +1,18 @@
-# LogLens
+<p align="center">
+  <img src="docs/icon-preview.png" alt="LogLens icon" width="180">
+</p>
 
-A Mac app for watching what your iOS app logs, live. Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields.
+<h1 align="center">LogLens</h1>
+
+<p align="center">
+  A Mac app for watching what your iOS app logs, live.<br>
+  <a href="https://github.com/HugoPrinsloo/LogLens/releases/latest">Download</a> &middot;
+  <a href="#install">Install</a> &middot;
+  <a href="#using-it">Using it</a> &middot;
+  <a href="#releasing">Releasing</a>
+</p>
+
+Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields.
 
 ![LogLens capturing events from an iOS simulator](docs/layout.png)
 
