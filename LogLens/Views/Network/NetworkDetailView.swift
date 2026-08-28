@@ -1,15 +1,11 @@
 import SwiftUI
 
+/// Inspector for a network row: the full transaction with headers and raw bodies.
 struct NetworkDetailView: View {
-    @Environment(NetworkStore.self) private var network
+    let tx: NetworkTransaction
 
     var body: some View {
-        if let tx = network.selectedTransaction {
-            TransactionDetail(tx: tx)
-                .id(tx.id)
-        } else {
-            ContentUnavailableView("No Request Selected", systemImage: "sidebar.trailing", description: Text("Select a request to inspect headers and bodies."))
-        }
+        TransactionDetail(tx: tx).id(tx.id)
     }
 }
 

@@ -9,28 +9,15 @@ import os
 final class NetworkStore {
 
     private static let log = Logger(subsystem: "com.hugoprinsloo.LogLens", category: "NetworkStore")
-    private static let selectLast = CommandLine.arguments.contains("--select-last")
     static let maxTransactions = 10_000
 
     // MARK: Data
+    /// Full transactions (headers, raw bodies) backing the inspector for the network rows in the log views.
     private(set) var transactions: [NetworkTransaction] = []
-    private(set) var filtered: [NetworkTransaction] = []
     private var indexByID: [NetworkTransaction.ID: Int] = [:]
-    private(set) var hostCounts: [String: Int] = [:]
-    private(set) var processCounts: [String: Int] = [:]
 
-    // MARK: Filter / UI
-    var searchText = "" { didSet { refilter() } }
-    var hostFilter: String? { didSet { refilter() } }
-    var processFilter: String? { didSet { refilter() } }
-    var selection: NetworkTransaction.ID? {
-        didSet { if selection != nil { showInspector = true } }
-    }
-    var showInspector = true
-    var autoScroll = true
-
-    var selectedTransaction: NetworkTransaction? {
-        guard let selection, let i = indexByID[selection], i < transactions.count else { return nil }
+    func transaction(id: NetworkTransaction.ID) -> NetworkTransaction? {
+        guard let i = indexByID[id], i < transactions.count else { return nil }
         return transactions[i]
     }
 
@@ -83,10 +70,6 @@ final class NetworkStore {
             let path = CommandLine.arguments[i + 1]
             FileManager.default.createFile(atPath: path, contents: nil)
             dumpHandle = FileHandle(forWritingAtPath: path)
-        }
-        // `--network` opens the Network view and starts the proxy; `--proxy` just starts it (dev aids).
-        if CommandLine.arguments.contains("--network") || CommandLine.arguments.contains("--proxy") {
-            Task { await start() }
         }
     }
 
@@ -157,11 +140,7 @@ final class NetworkStore {
 
     func clear() {
         transactions.removeAll(keepingCapacity: true)
-        filtered.removeAll(keepingCapacity: true)
         indexByID.removeAll()
-        hostCounts.removeAll()
-        processCounts.removeAll()
-        selection = nil
     }
 
     func dismissError() { error = nil }
@@ -231,25 +210,15 @@ final class NetworkStore {
             if tx.state != .pending { onFinished?(tx) }   // e.g. a rejected handshake reported as a failed CONNECT
             if transactions.count >= Self.maxTransactions {
                 let drop = transactions.count - Self.maxTransactions + 1
-                for t in transactions.prefix(drop) { decrement(t) }
                 transactions.removeFirst(drop)
                 rebuildIndex()
             }
             indexByID[tx.id] = transactions.count
             transactions.append(tx)
-            increment(tx)
-            if matches(tx) { filtered.append(tx) }
-            // `--select-last` keeps the newest request selected (dev/screenshot aid).
-            if Self.selectLast, !tx.isTunnel { selection = tx.id }
         case .updated(let tx):
             guard let i = indexByID[tx.id] else { return }
             if tx.state != .pending && transactions[i].state == .pending { onFinished?(tx) }
             transactions[i] = tx
-            if let j = filtered.lastIndex(where: { $0.id == tx.id }) {
-                if matches(tx) { filtered[j] = tx } else { filtered.remove(at: j) }
-            } else if matches(tx) {
-                refilter()
-            }
         }
         if let dumpHandle, case .updated(let tx) = event, tx.state != .pending {
             let enc = JSONEncoder()
@@ -261,44 +230,8 @@ final class NetworkStore {
         }
     }
 
-    private func increment(_ tx: NetworkTransaction) {
-        hostCounts[tx.host, default: 0] += 1
-        processCounts[tx.clientProcess, default: 0] += 1
-    }
-
-    private func decrement(_ tx: NetworkTransaction) {
-        if let n = hostCounts[tx.host] { if n <= 1 { hostCounts[tx.host] = nil } else { hostCounts[tx.host] = n - 1 } }
-        if let n = processCounts[tx.clientProcess] { if n <= 1 { processCounts[tx.clientProcess] = nil } else { processCounts[tx.clientProcess] = n - 1 } }
-    }
-
     private func rebuildIndex() {
         indexByID.removeAll(keepingCapacity: true)
         for (i, t) in transactions.enumerated() { indexByID[t.id] = i }
-    }
-
-    // MARK: - Filtering
-
-    var isFilterActive: Bool { !searchText.isEmpty || hostFilter != nil || processFilter != nil }
-
-    func resetFilter() {
-        searchText = ""
-        hostFilter = nil
-        processFilter = nil
-    }
-
-    private func matches(_ tx: NetworkTransaction) -> Bool {
-        if let hostFilter, tx.host != hostFilter { return false }
-        if let processFilter, tx.clientProcess != processFilter { return false }
-        guard !searchText.isEmpty else { return true }
-        let q = searchText
-        if tx.url.localizedCaseInsensitiveContains(q) { return true }
-        if tx.method.localizedCaseInsensitiveContains(q) { return true }
-        if let code = tx.statusCode, String(code).contains(q) { return true }
-        if tx.clientProcess.localizedCaseInsensitiveContains(q) { return true }
-        return false
-    }
-
-    private func refilter() {
-        filtered = isFilterActive ? transactions.filter(matches) : transactions
     }
 }

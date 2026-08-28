@@ -13,7 +13,7 @@
   <a href="#releasing">Releasing</a>
 </p>
 
-Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields. Switch to the timeline and the same events arrive as cards. Turn on the network inspector and the app's HTTP requests show up too, decrypted, with headers and bodies, without touching the app.
+Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields. Switch to the timeline and the same events arrive as cards. Pressing Record also starts a local proxy, so the app's HTTP requests show up in the same list, decrypted, with headers and bodies, without touching the app.
 
 ![LogLens capturing events from an iOS simulator](docs/layout.png)
 
@@ -55,7 +55,7 @@ The generated `LogLens.xcodeproj` is checked in, so you only need to run `xcodeg
 
 1. Choose a source in the toolbar. Booted simulators are listed first. "This Mac" streams the host's unified log instead.
 2. Press Record (or ⌘R) and use your app.
-3. Filter. Clicking an app, subsystem, or category in the sidebar shows only that one. ⌘-click adds more. The search box matches against the message, the title, and the names of the process, subsystem, and category.
+3. Filter. Click apps, subsystems, or categories in the sidebar to add them to the filter; click again to remove one, right-click for "Only This". The field above the lists searches them by name. The search box in the toolbar matches against the message, the title, and the names of the process, subsystem, and category.
 4. Select a row to inspect it. ⇧⌘S stars a row, and the star toggle in the toolbar shows only starred rows.
 
 Passing `--record` on the command line starts capturing as soon as the app launches. Handy when you're scripting a test run.
@@ -85,11 +85,9 @@ There's also a Copy as Image toggle. With it on, clicking a card puts a PNG of t
 
 ## Network inspector
 
-This is the part I originally wanted Proxyman for. The third view lists the simulator's HTTP requests. Press Record there and LogLens starts a local proxy, installs its own root certificate into every booted simulator and points the Mac's proxy settings at itself. The simulator picks those settings up on its own, so every HTTPS request an app makes from then on shows up decrypted: method, status, timing, headers, both bodies. JSON gets pretty-printed and gzip unpacked. Select a row to inspect it, or right-click to copy the URL, the body or a cURL command.
+This is the part I originally wanted Proxyman for. There is one Record button, and it starts two things: the log stream and a local HTTP(S) proxy. LogLens installs its own root certificate into every booted simulator and points the Mac's proxy settings at itself. The simulator picks those settings up on its own, so every HTTPS request an app makes from then on lands in the same list as the log lines, with method, status, timing and sizes in the row. Select one and the inspector shows headers and both bodies; JSON gets pretty-printed and gzip unpacked, and the copy menu has the URL, the body and a cURL command.
 
-![The network inspector showing decrypted requests from the simulator](docs/network-inspector.png)
-
-Finished requests also flow into the log views. In the timeline, a POST to the analytics endpoint lands right after the event that caused it, with the payload in a syntax coloured box, which is the thing I actually wanted to see. The Network toggle in the log toolbar hides them if they get in the way.
+In the timeline, a POST to the analytics endpoint lands right after the event that caused it, with the payload in a syntax coloured box, which is the thing I actually wanted to see. The Network menu in the toolbar turns HTTP(S) capture off if it gets in the way, and "Network" is a subsystem in the sidebar so you can filter requests in or out like anything else.
 
 ![A network request rendered as a timeline card](docs/network-card.png)
 
@@ -167,7 +165,7 @@ LogLens/
   Parsing/    MessageParser, SwiftDescriptionParser
   Models/     LogEntry, LogLevel, ParsedMessage, NetworkTransaction, NetworkLogEntry
   Store/      EventStore, NetworkStore (@Observable), LogFilter, TimelineFeed, TimelineLane
-  Views/      ContentView, Sidebar, Table, Timeline, Network, Detail, Settings
+  Views/      ContentView, Sidebar, Table, Timeline, Network (request inspector), Detail, Settings
   Support/    Formatters, ExportDocument, Pasteboard
   Resources/  AppIcon.icon (Liquid Glass layers) and the PNG fallback catalog
 scripts/

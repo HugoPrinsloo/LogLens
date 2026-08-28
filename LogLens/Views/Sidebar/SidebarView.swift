@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(EventStore.self) private var store
+    @State private var query = ""
 
     var body: some View {
         List {
@@ -9,9 +10,14 @@ struct SidebarView: View {
                 SourceCard()
             }
 
-            FacetSection(title: "Apps", symbol: "app.badge", counts: store.processCounts, make: Facet.process)
-            FacetSection(title: "Subsystems", symbol: "shippingbox", counts: store.subsystemCounts, make: Facet.subsystem)
-            FacetSection(title: "Categories", symbol: "tag", counts: store.categoryCounts, make: Facet.category)
+            Section {
+                FacetSearchField(text: $query)
+                    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 6, trailing: 0))
+            }
+
+            FacetSection(title: "Apps", symbol: "app.badge", counts: store.processCounts, query: query, make: Facet.process)
+            FacetSection(title: "Subsystems", symbol: "shippingbox", counts: store.subsystemCounts, query: query, make: Facet.subsystem)
+            FacetSection(title: "Categories", symbol: "tag", counts: store.categoryCounts, query: query, make: Facet.category)
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
@@ -31,6 +37,7 @@ struct SidebarView: View {
 
 private struct SourceCard: View {
     @Environment(EventStore.self) private var store
+    @Environment(NetworkStore.self) private var network
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -56,6 +63,7 @@ private struct SourceCard: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!store.selectedSource.isSupported)
+                .help(store.isCapturing ? "Stop recording (⌘R)" : "Start recording logs and HTTP(S) requests (⌘R)")
 
                 Button { store.clear() } label: { Image(systemName: "trash") }
                     .controlSize(.small)
@@ -65,8 +73,41 @@ private struct SourceCard: View {
                 Text("Physical devices need a different transport and aren't supported yet.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
+            if store.isCapturing && store.captureNetwork {
+                Label(network.statusLine, systemImage: network.isCapturing ? "network" : "network.badge.shield.half.filled")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// Filters the facet lists below by name.
+private struct FacetSearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .medium))
+            TextField("Search filters", text: $text)
+                .textFieldStyle(.plain)
+                .font(.callout)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(.separator))
     }
 }
 
@@ -75,32 +116,40 @@ private struct FacetSection: View {
     let title: String
     let symbol: String
     let counts: [String: Int]
+    let query: String
     let make: (String) -> Facet
 
     private var rows: [(key: String, count: Int)] {
-        counts.map { (key: $0.key, count: $0.value) }.sorted {
-            if $0.count != $1.count { return $0.count > $1.count }
-            return $0.key < $1.key
-        }
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return counts
+            .filter { q.isEmpty || $0.key.localizedCaseInsensitiveContains(q) }
+            .map { (key: $0.key, count: $0.value) }
+            .sorted {
+                if $0.count != $1.count { return $0.count > $1.count }
+                return $0.key < $1.key
+            }
+    }
+
+    private var selectedCount: Int {
+        counts.keys.filter { store.filter.facets.contains(make($0)) }.count
     }
 
     var body: some View {
         Section {
             if rows.isEmpty {
-                Text("No events yet").font(.caption).foregroundStyle(.tertiary)
+                Text(counts.isEmpty ? "No events yet" : "No matches").font(.caption).foregroundStyle(.tertiary)
             }
             ForEach(rows, id: \.key) { row in
                 let facet = make(row.key)
                 let selected = store.filter.facets.contains(facet)
                 FacetRow(name: row.key.isEmpty ? "(none)" : row.key, count: row.count, selected: selected, dimmed: row.key.isEmpty)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        let cmd = NSEvent.modifierFlags.contains(.command)
-                        store.toggleFacet(facet, exclusive: !cmd)
-                    }
+                    // Click toggles: selecting adds to the current selection, clicking a selected row deselects it.
+                    .onTapGesture { store.toggleFacet(facet) }
                     .contextMenu {
-                        Button(selected ? "Remove from filter" : "Add to filter") { store.toggleFacet(facet, exclusive: false) }
-                        Button("Only this") { store.toggleFacet(facet, exclusive: true) }
+                        Button("Only This") { store.toggleFacet(facet, exclusive: true) }
+                        Button("Clear \(title) Selection") { store.clearFacets(ofKind: facet) }
+                            .disabled(selectedCount == 0)
                         Divider()
                         Menu("Timeline Lanes") {
                             ForEach(Array(store.lanes.enumerated()), id: \.element.id) { i, lane in
@@ -123,7 +172,17 @@ private struct FacetSection: View {
                     }
             }
         } header: {
-            Label(title, systemImage: symbol)
+            HStack {
+                Label(title, systemImage: symbol)
+                Spacer()
+                if selectedCount > 0 {
+                    Button("Clear") { store.clearFacets(ofKind: make("")) }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(Color.accentColor)
+                        .help("Deselect all \(title.lowercased())")
+                }
+            }
         }
     }
 }

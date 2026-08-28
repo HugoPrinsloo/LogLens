@@ -4,55 +4,49 @@ struct ContentView: View {
     @Environment(EventStore.self) private var store
     @Environment(NetworkStore.self) private var network
     @State private var searchText = ""
-    @State private var networkSearchText = ""
     @State private var isExporting = false
     @State private var exportFiltered = true
-
-    private var isNetwork: Bool { store.viewMode == .network }
 
     var body: some View {
         @Bindable var store = store
         NavigationSplitView {
-            Group {
-                if isNetwork { NetworkSidebar() } else { SidebarView() }
-            }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
+            SidebarView()
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
             VStack(spacing: 0) {
-                if let error = store.captureError, !isNetwork {
+                if let error = store.captureError {
                     ErrorBanner(message: error) { store.dismissError() }
                 }
-                if let error = network.error, isNetwork {
-                    ErrorBanner(message: error) { network.dismissError() }
+                if let error = network.error {
+                    ErrorBanner(message: "HTTP(S) proxy: \(error)") { network.dismissError() }
                 }
                 switch store.viewMode {
                 case .table: EventTableView()
                 case .timeline: EventTimelineView()
-                case .network: NetworkView()
                 }
                 Divider()
                 StatusBar()
             }
-            // Timeline cards expand in place, so the inspector only applies to the table and network views.
+            // Timeline cards expand in place, so the inspector only applies to the table.
             .inspector(isPresented: Binding(
-                get: { isNetwork ? network.showInspector : (store.showInspector && store.viewMode == .table) },
-                set: { if isNetwork { network.showInspector = $0 } else { store.showInspector = $0 } }
+                get: { store.showInspector && store.viewMode == .table },
+                set: { store.showInspector = $0 }
             )) {
                 Group {
-                    if isNetwork { NetworkDetailView() } else { EventDetailView() }
+                    // A network row gets the full request inspector (headers, raw bodies) while the proxy still holds it.
+                    if let entry = store.selectedEntry, entry.isNetwork, let tx = network.transaction(id: entry.id - LogEntry.networkIDBase) {
+                        NetworkDetailView(tx: tx)
+                    } else {
+                        EventDetailView()
+                    }
                 }
                 .inspectorColumnWidth(min: 320, ideal: 400, max: 800)
             }
         }
         .navigationTitle("LogLens")
         .navigationSubtitle(subtitle)
-        .searchable(
-            text: Binding(get: { isNetwork ? networkSearchText : searchText }, set: { if isNetwork { networkSearchText = $0 } else { searchText = $0 } }),
-            placement: .toolbar,
-            prompt: isNetwork ? "Filter requests" : "Filter events"
-        )
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Filter events")
         .onChange(of: searchText) { _, new in store.updateFilter { $0.searchText = new } }
-        .onChange(of: networkSearchText) { _, new in network.searchText = new }
         .toolbar { CaptureToolbar(isExporting: $isExporting, exportFiltered: $exportFiltered) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in store.stopCapture() }
         .fileExporter(
@@ -64,8 +58,8 @@ struct ContentView: View {
     }
 
     private var subtitle: String {
-        if isNetwork { return network.isCapturing ? "Capturing HTTP(S) · \(network.statusLine)" : "Network idle" }
-        return store.isCapturing ? "Capturing \(store.selectedSource.name)" : "Idle"
+        guard store.isCapturing else { return "Idle" }
+        return network.isCapturing ? "Recording \(store.selectedSource.name) + HTTP(S)" : "Recording \(store.selectedSource.name)"
     }
 }
 
@@ -78,90 +72,6 @@ struct CaptureToolbar: ToolbarContent {
     @Binding var exportFiltered: Bool
 
     var body: some ToolbarContent {
-        if store.viewMode == .network {
-            networkItems
-        } else {
-            logItems
-        }
-    }
-
-    private var viewPicker: some View {
-        Picker("View", selection: Binding(get: { store.viewMode }, set: { store.viewMode = $0 })) {
-            ForEach(EventViewMode.allCases) { m in
-                Image(systemName: m.symbol).tag(m).help(m.title)
-            }
-        }
-        .pickerStyle(.segmented)
-        .help("Switch between list, timeline and network view")
-    }
-
-    @ToolbarContentBuilder private var networkItems: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Label {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("HTTP(S) Proxy")
-                    Text(network.statusLine).font(.caption2).foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: "network")
-            }
-            .labelStyle(.titleAndIcon)
-        }
-
-        ToolbarItemGroup(placement: .principal) {
-            viewPicker
-
-            Button {
-                network.toggleCapture()
-            } label: {
-                Label(network.isCapturing ? "Stop" : "Record", systemImage: network.isCapturing ? "stop.circle.fill" : "record.circle")
-                    .foregroundStyle(network.isCapturing ? .red : .primary)
-            }
-            .help(network.isCapturing ? "Stop the proxy and restore Mac proxy settings (⌘R)" : "Start the proxy (⌘R)")
-            .disabled(network.isStarting)
-
-            Button { network.clear() } label: { Label("Clear", systemImage: "trash") }
-                .help("Clear all requests (⌘K)")
-                .disabled(network.transactions.isEmpty)
-
-            Button {
-                Task { await network.repair() }
-            } label: {
-                Label("Heal", systemImage: "bandage.fill")
-            }
-            .help("Heal the connection: restore the Mac proxy, reinstall the certificate in every booted simulator, restart the proxy")
-            .disabled(network.isStarting)
-        }
-
-        ToolbarItemGroup(placement: .primaryAction) {
-            Menu {
-                ForEach(DecryptPolicy.allCases) { p in
-                    Button {
-                        network.policy = p
-                    } label: {
-                        if p == network.policy { Label(p.title, systemImage: "checkmark") } else { Text(p.title) }
-                    }
-                }
-            } label: {
-                Label("Decrypt", systemImage: network.policy == .nothing ? "lock" : "lock.open")
-            }
-            .help("Which clients' TLS connections LogLens decrypts")
-
-            Toggle(isOn: Binding(get: { network.autoScroll }, set: { network.autoScroll = $0 })) {
-                Label("Auto-scroll", systemImage: "arrow.down.to.line")
-            }
-            .help("Follow newest requests (⇧⌘T)")
-
-            Button {
-                network.showInspector.toggle()
-            } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .help("Toggle inspector (⌥⌘I)")
-        }
-    }
-
-    @ToolbarContentBuilder private var logItems: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
             SourceMenu()
         }
@@ -175,11 +85,19 @@ struct CaptureToolbar: ToolbarContent {
                 Label(store.isCapturing ? "Stop" : "Record", systemImage: store.isCapturing ? "stop.circle.fill" : "record.circle")
                     .foregroundStyle(store.isCapturing ? .red : .primary)
             }
-            .help(store.isCapturing ? "Stop capturing (⌘R)" : "Start capturing (⌘R)")
+            .help(store.isCapturing ? "Stop recording (⌘R)" : "Start recording logs and HTTP(S) requests (⌘R)")
 
             Button { store.clear() } label: { Label("Clear", systemImage: "trash") }
                 .help("Clear all events (⌘K)")
                 .disabled(store.entries.isEmpty)
+
+            Button {
+                Task { await network.repair() }
+            } label: {
+                Label("Heal", systemImage: "bandage.fill")
+            }
+            .help("Heal the HTTP(S) proxy: restore the Mac proxy, reinstall the certificate in every booted simulator, restart the proxy")
+            .disabled(!store.isCapturing || !store.captureNetwork || network.isStarting)
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
@@ -203,11 +121,7 @@ struct CaptureToolbar: ToolbarContent {
                 .help(store.copyCardOnClick ? "Clicking a card copies it as a PNG (click again to go back to expand/collapse)" : "Turn on to copy a card as a PNG when you click it")
             }
 
-            Toggle(isOn: Binding(get: { store.showNetworkEvents }, set: { store.showNetworkEvents = $0 })) {
-                Label("Network", systemImage: "network")
-            }
-            .help(store.showNetworkEvents ? "Hide HTTP requests captured by the proxy" : "Show HTTP requests captured by the proxy alongside log events")
-
+            NetworkMenu()
             ScopeMenu()
             LevelMenu()
 
@@ -237,6 +151,45 @@ struct CaptureToolbar: ToolbarContent {
             .help("Toggle inspector (⌥⌘I)")
             .disabled(store.viewMode == .timeline)
         }
+    }
+
+    private var viewPicker: some View {
+        Picker("View", selection: Binding(get: { store.viewMode }, set: { store.viewMode = $0 })) {
+            ForEach(EventViewMode.allCases) { m in
+                Image(systemName: m.symbol).tag(m).help(m.title)
+            }
+        }
+        .pickerStyle(.segmented)
+        .help("Switch between list and timeline")
+    }
+}
+
+/// HTTP(S) capture on/off plus the proxy's certificate and decrypt settings.
+struct NetworkMenu: View {
+    @Environment(EventStore.self) private var store
+    @Environment(NetworkStore.self) private var network
+
+    var body: some View {
+        Menu {
+            Toggle("Capture HTTP(S) Requests", isOn: Binding(get: { store.captureNetwork }, set: { store.captureNetwork = $0 }))
+            Text(network.statusLine).foregroundStyle(.secondary)
+            Divider()
+            Picker("Decrypt", selection: Binding(get: { network.policy }, set: { network.policy = $0 })) {
+                ForEach(DecryptPolicy.allCases) { Text($0.title).tag($0) }
+            }
+            Divider()
+            Button("Reinstall Certificate in Booted Simulators") { Task { await network.reinstallCertificate() } }
+            Button("Trust Certificate on This Mac…") { Task { await network.trustOnThisMac() } }
+            Button("Forget Pinned Hosts (\(network.bypassHosts.count))") { network.clearBypassHosts() }
+                .disabled(network.bypassHosts.isEmpty)
+            Button("Reveal Certificate in Finder") {
+                if !network.caPath.isEmpty { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: network.caPath)]) }
+            }
+            .disabled(network.caPath.isEmpty)
+        } label: {
+            Label("Network", systemImage: store.captureNetwork ? "network" : "network.slash")
+        }
+        .help(store.captureNetwork ? "HTTP(S) requests are captured with the recording" : "HTTP(S) capture is off")
     }
 }
 
@@ -353,40 +306,6 @@ struct StatusBar: View {
     @Environment(NetworkStore.self) private var network
 
     var body: some View {
-        if store.viewMode == .network { networkBar } else { logBar }
-    }
-
-    private var networkBar: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(network.isCapturing ? Color.red : Color.secondary.opacity(0.4))
-                    .frame(width: 8, height: 8)
-                    .overlay {
-                        if network.isCapturing {
-                            Circle().stroke(Color.red.opacity(0.35), lineWidth: 3).scaleEffect(1.6)
-                        }
-                    }
-                Text(network.isCapturing ? "Proxy on 127.0.0.1:\(String(network.port))" : "Proxy idle")
-            }
-            Divider().frame(height: 12)
-            Text("\(Formatters.count(network.filtered.count)) of \(Formatters.count(network.transactions.count)) requests")
-            if network.isFilterActive {
-                Button("Reset filters") { network.resetFilter() }
-                    .buttonStyle(.link)
-                    .font(.caption)
-            }
-            Spacer()
-            Text(network.policy.title).foregroundStyle(.tertiary)
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
-    }
-
-    private var logBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 6) {
                 Circle()
@@ -397,7 +316,7 @@ struct StatusBar: View {
                             Circle().stroke(Color.red.opacity(0.35), lineWidth: 3).scaleEffect(1.6)
                         }
                     }
-                Text(store.isCapturing ? "Capturing" : "Idle")
+                Text(store.isCapturing ? "Recording" : "Idle")
             }
             Divider().frame(height: 12)
             Text("\(Formatters.count(store.filtered.count)) of \(Formatters.count(store.entries.count)) events")
@@ -409,6 +328,12 @@ struct StatusBar: View {
             Spacer()
             if store.isCapturing {
                 Text("\(store.eventsPerSecond)/s").monospacedDigit()
+                Divider().frame(height: 12)
+            }
+            if store.isCapturing && store.captureNetwork {
+                Label(network.isCapturing ? "HTTP(S) on :\(String(network.port))" : network.statusLine, systemImage: "network")
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
                 Divider().frame(height: 12)
             }
             Text("buffer \(Formatters.count(store.maxEntries))")

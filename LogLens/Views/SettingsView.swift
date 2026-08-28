@@ -49,8 +49,20 @@ struct SettingsView: View {
                 HStack {
                     Button("Reinstall Certificate in Simulators") { Task { await network.reinstallCertificate() } }
                     Button("Trust on This Mac…") { Task { await network.trustOnThisMac() } }
+                    Button("Reveal Certificate") {
+                        if !network.caPath.isEmpty { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: network.caPath)]) }
+                    }
+                    .disabled(network.caPath.isEmpty)
                 }
                 .controlSize(.small)
+                HStack {
+                    Text("Pinned hosts (tunnelled, not decrypted): \(network.bypassHosts.count)")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Forget Pinned Hosts") { network.clearBypassHosts() }
+                        .controlSize(.small)
+                        .disabled(network.bypassHosts.isEmpty)
+                }
                 if !network.caPath.isEmpty {
                     Text(network.caPath).font(.caption.monospaced()).foregroundStyle(.tertiary).textSelection(.enabled)
                 }

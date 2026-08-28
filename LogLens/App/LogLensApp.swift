@@ -8,7 +8,9 @@ struct LogLensApp: App {
     init() {
         let store = EventStore()
         let network = NetworkStore()
-        // Finished HTTP transactions become entries in the log table/timeline too.
+        // One recording: Record starts the log stream and the proxy together, and finished HTTP
+        // transactions become entries in the same table/timeline.
+        store.network = network
         network.onFinished = { [weak store] tx in store?.appendNetwork(tx) }
         _store = State(initialValue: store)
         _network = State(initialValue: network)
@@ -25,23 +27,15 @@ struct LogLensApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandMenu("Capture") {
-                // ⌘R / ⌘K act on whichever inspector is showing: logs, or the network proxy.
-                if store.viewMode == .network {
-                    Button(network.isCapturing ? "Stop Network Capture" : "Start Network Capture") { network.toggleCapture() }
-                        .keyboardShortcut("r", modifiers: .command)
-                    Button("Clear Requests") { network.clear() }
-                        .keyboardShortcut("k", modifiers: .command)
-                } else {
-                    Button(store.isCapturing ? "Stop Capture" : "Start Capture") { store.toggleCapture() }
-                        .keyboardShortcut("r", modifiers: .command)
-                    Button("Clear Events") { store.clear() }
-                        .keyboardShortcut("k", modifiers: .command)
-                }
+                Button(store.isCapturing ? "Stop Recording" : "Record") { store.toggleCapture() }
+                    .keyboardShortcut("r", modifiers: .command)
+                Button("Clear Events") { store.clear() }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button("Heal Network Connection") { Task { await network.repair() } }
+                    .disabled(!store.isCapturing || !store.captureNetwork || network.isStarting)
                 Divider()
-                Toggle("Auto-scroll to Newest", isOn: Binding(
-                    get: { store.viewMode == .network ? network.autoScroll : store.autoScroll },
-                    set: { if store.viewMode == .network { network.autoScroll = $0 } else { store.autoScroll = $0 } }
-                ))
+                Toggle("Capture HTTP(S) Requests", isOn: Binding(get: { store.captureNetwork }, set: { store.captureNetwork = $0 }))
+                Toggle("Auto-scroll to Newest", isOn: Binding(get: { store.autoScroll }, set: { store.autoScroll = $0 }))
                     .keyboardShortcut("t", modifiers: [.command, .shift])
                 Divider()
                 Button("Star Selected") { if let id = store.selection { store.toggleStar(id) } }
@@ -51,10 +45,7 @@ struct LogLensApp: App {
                     .keyboardShortcut("0", modifiers: [.command, .shift])
             }
             CommandGroup(after: .toolbar) {
-                Toggle("Show Inspector", isOn: Binding(
-                    get: { store.viewMode == .network ? network.showInspector : store.showInspector },
-                    set: { if store.viewMode == .network { network.showInspector = $0 } else { store.showInspector = $0 } }
-                ))
+                Toggle("Show Inspector", isOn: Binding(get: { store.showInspector }, set: { store.showInspector = $0 }))
                     .keyboardShortcut("i", modifiers: [.command, .option])
             }
         }

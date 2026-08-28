@@ -3,13 +3,13 @@ import Observation
 import SwiftUI
 
 enum EventViewMode: String, CaseIterable, Identifiable {
-    case table, timeline, network
+    case table, timeline
     var id: String { rawValue }
     var title: String {
-        switch self { case .table: "List"; case .timeline: "Timeline"; case .network: "Network" }
+        switch self { case .table: "List"; case .timeline: "Timeline" }
     }
     var symbol: String {
-        switch self { case .table: "list.bullet"; case .timeline: "rectangle.stack"; case .network: "network" }
+        switch self { case .table: "list.bullet"; case .timeline: "rectangle.stack" }
     }
 }
 
@@ -39,6 +39,9 @@ final class EventStore {
     var maxEntries: Int = 100_000 { didSet { UserDefaults.standard.set(maxEntries, forKey: "maxEntries") } }
     private(set) var isCapturing = false
     private(set) var captureError: String?
+    /// The HTTP(S) proxy rides along with the log capture: one Record button starts and stops both.
+    /// Wired in `LogLensApp.init`.
+    var network: NetworkStore?
 
     // MARK: UI
     var selection: LogEntry.ID? {
@@ -62,9 +65,15 @@ final class EventStore {
     }
     /// Timeline toolbar toggle: when on, clicking a card copies it as a PNG instead of expanding it. Not persisted.
     var copyCardOnClick = false
-    /// Show proxied HTTP requests (from the Network tab) alongside log events in the table and timeline.
-    var showNetworkEvents = true {
-        didSet { UserDefaults.standard.set(showNetworkEvents, forKey: "showNetworkEvents"); refilter() }
+    /// Capture HTTP(S) requests through the proxy as part of the recording. Turning it off mid-capture stops the
+    /// proxy and hides the requests already captured; turning it on starts the proxy right away.
+    var captureNetwork = true {
+        didSet {
+            guard captureNetwork != oldValue else { return }
+            UserDefaults.standard.set(captureNetwork, forKey: "captureNetwork")
+            refilter()
+            if isCapturing { captureNetwork ? startNetwork() : network?.stop() }
+        }
     }
     var timelineExpandAll = false {
         didSet { UserDefaults.standard.set(timelineExpandAll, forKey: "timelineExpandAll") }
@@ -78,6 +87,8 @@ final class EventStore {
     }
 
     private let streamer = LogStreamer()
+    /// `--select-last` keeps the newest network row selected (dev/screenshot aid for the request inspector).
+    private static let selectLastNetwork = CommandLine.arguments.contains("--select-last")
     private var matcher: (LogEntry) -> Bool = { _ in true }
     private var rateWindow: [(Date, Int)] = []
     private var discoveryTask: Task<Void, Never>?
@@ -90,9 +101,7 @@ final class EventStore {
         if d.object(forKey: "maxEntries") != nil { maxEntries = max(1_000, d.integer(forKey: "maxEntries")) }
         if let raw = d.string(forKey: "viewMode"), let m = EventViewMode(rawValue: raw) { viewMode = m }
         timelineExpandAll = d.bool(forKey: "timelineExpandAll")
-        if d.object(forKey: "showNetworkEvents") != nil { showNetworkEvents = d.bool(forKey: "showNetworkEvents") }
-        // `LogLens --network` opens straight into the network inspector (and NetworkStore auto-starts the proxy).
-        if CommandLine.arguments.contains("--network") { viewMode = .network }
+        if d.object(forKey: "captureNetwork") != nil { captureNetwork = d.bool(forKey: "captureNetwork") }
         // didSet doesn't fire during init.
         timeline.setActive(viewMode == .timeline, seed: [])
 
@@ -156,12 +165,20 @@ final class EventStore {
             isCapturing = true
         } catch {
             captureError = error.localizedDescription
+            return
         }
+        if captureNetwork { startNetwork() }
     }
 
     func stopCapture() {
         streamer.stop()
         isCapturing = false
+        network?.stop()
+    }
+
+    private func startNetwork() {
+        guard let network else { return }
+        Task { await network.start() }
     }
 
     var commandPreview: String {
@@ -193,6 +210,7 @@ final class EventStore {
             timeline.ingest(matches)
         }
         for lane in lanes { lane.feed.ingest(batch.filter(lane.matcher)) }
+        if Self.selectLastNetwork, let last = batch.last(where: { $0.isNetwork && $0.network?.isTunnel == false }) { selection = last.id }
         trimIfNeeded()
         updateRate(added: batch.count)
     }
@@ -238,6 +256,7 @@ final class EventStore {
         eventsPerSecond = 0
         timeline.reset(seed: [])
         for lane in lanes { lane.feed.reset(seed: []) }
+        network?.clear()
     }
 
     // MARK: - Filtering
@@ -252,12 +271,14 @@ final class EventStore {
 
     func resetFilter() { updateFilter { $0 = LogFilter() } }
 
-    func toggleFacet(_ facet: Facet, exclusive: Bool) {
+    /// Plain click: toggle the facet in or out of the selection (checkbox semantics).
+    /// `exclusive` ("Only this"): this facet alone within its kind, keeping the other kinds.
+    func toggleFacet(_ facet: Facet, exclusive: Bool = false) {
         updateFilter { f in
             if exclusive {
-                // Plain click: this facet alone within its kind (keeps other kinds).
                 let sameKind = f.facets.filter { kind($0) == kind(facet) }
-                if sameKind == [facet] { f.facets.subtract(sameKind) } else { f.facets.subtract(sameKind); f.facets.insert(facet) }
+                f.facets.subtract(sameKind)
+                f.facets.insert(facet)
             } else if f.facets.contains(facet) {
                 f.facets.remove(facet)
             } else {
@@ -266,14 +287,19 @@ final class EventStore {
         }
     }
 
+    /// Clears every selected facet of the given kind (e.g. all selected categories).
+    func clearFacets(ofKind sample: Facet) {
+        updateFilter { f in f.facets = f.facets.filter { kind($0) != kind(sample) } }
+    }
+
     private func kind(_ facet: Facet) -> Int {
         switch facet { case .process: 0; case .subsystem: 1; case .category: 2 }
     }
 
-    /// The sidebar/search filter plus the "show network events" toggle.
+    /// The sidebar/search filter plus the "capture network" toggle (off hides requests already captured).
     private func makeMatcher(_ f: LogFilter) -> (LogEntry) -> Bool {
         let base = f.makeMatcher(starred: starred)
-        let showNetwork = showNetworkEvents
+        let showNetwork = captureNetwork
         return { e in (showNetwork || !e.isNetwork) && base(e) }
     }
 

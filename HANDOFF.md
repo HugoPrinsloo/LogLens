@@ -1,6 +1,6 @@
 # LogLens — Agent Handoff
 
-_Last updated: 2026-08-28 (evening). **v1.2.0 released** with the network inspector, split timeline lanes, network cards in the timeline, and copy-as-image. Tree is clean._
+_Last updated: 2026-08-28 (late evening). **v1.2.0 released**; since then (uncommitted → committed on `develop`, not yet released): **one recording** (Record starts log stream + proxy; Network view mode removed), sidebar click-to-toggle facets + facet search, Heal always in the toolbar. See "Single recording" below._
 
 ## What this app is
 
@@ -15,13 +15,24 @@ LogLens is a macOS 15 SwiftUI app (owner: Hugo Prinsloo) that live-captures OSLo
   - What it does: up to 4 side-by-side timeline lanes, each with its own facet set and its own paced feed. Toolbar "Split" toggle (timeline mode) creates 2 lanes (lane 1 = current sidebar facets, lane 2 = everything); sidebar right-click → "Timeline Lanes" assigns facets to lanes; lane headers have ✕ to close; `--split` launch flag opens pre-split.
   - Hugo used Split with Network | EventBus lanes during the session, so the UX is at least workable; no explicit feedback on it.
 
+## Single recording (2026-08-28, after 1.2.0) — Hugo's feedback round
+
+Hugo: "Recording should always just happen in one place… one single record ability with multiple ways to view the results", the Network view mode is redundant, ⌘-click multi-select "feels hidden", add sidebar search, make Heal visible everywhere.
+
+- `EventStore.startCapture()/stopCapture()` are **the** entry points. `EventStore.network: NetworkStore?` (wired in `LogLensApp.init`) — `startCapture` also `Task { await network.start() }` when `captureNetwork` is on; `stopCapture` calls `network.stop()`; `clear()` also `network.clear()`. Sidebar Record button, toolbar Record button and ⌘R all call `store.toggleCapture()`, so they always show the same state. `store.isCapturing` (log stream) is the truth for the buttons; `network.isCapturing` only feeds status text.
+- `captureNetwork` (persisted key `captureNetwork`, default on; replaced `showNetworkEvents`) = capture HTTP(S) as part of the recording. Off → proxy stops (if recording) and network rows are hidden by the matcher; on → proxy starts immediately.
+- `EventViewMode` is `table | timeline` only. `NetworkView.swift` and `NetworkSidebar.swift` deleted. `NetworkStore` lost its own filter/facets/selection/autoScroll/showInspector; it keeps the full `transactions` (cap 10k) + `transaction(id:)` so the **inspector shows `NetworkDetailView(tx:)`** (headers, raw bodies, cURL) when the selected table row is a network entry (`entry.id - LogEntry.networkIDBase`), falling back to `EventDetailView` if the proxy no longer holds it. `--network`/`--proxy`/`--select-last` on NetworkStore are gone; `--record` starts everything; `--select-last` on EventStore keeps the newest network row selected (screenshot aid).
+- Toolbar (`ContentView.CaptureToolbar`, single set): SourceMenu · [List|Timeline] · Record/Stop · Clear · **Heal** (bandage, disabled unless recording with network on) · (timeline: Split/Expand All/Copy as Image) · **Network menu** (`NetworkMenu`: Capture HTTP(S) toggle, status line, Decrypt policy picker, reinstall cert / trust on Mac / forget pinned hosts / reveal cert) · Scope · Levels · Starred · Auto-scroll · Export · Inspector. The proxy's certificate actions also live in Settings → Network Proxy. Status bar shows "HTTP(S) on :9095" while recording; sidebar SourceCard shows `network.statusLine` under Record.
+- Sidebar: **plain click toggles** a facet (append / deselect) — `toggleFacet(_:exclusive: = false)`; context menu "Only This" (exclusive within kind) and "Clear <Section> Selection" (`clearFacets(ofKind:)`); section header shows a "Clear" link when any facet of that kind is selected. **Search field** (`FacetSearchField`, flat rounded box, placeholder "Search filters") above the sections filters Apps/Subsystems/Categories by name (`localizedCaseInsensitiveContains`); a section with no matches shows "No matches".
+- Verified with screenshots: unified list of log + network rows while recording, request inspector for a network row, sidebar search field. Clicks can't be simulated on this Mac, so toggle/search interactions were verified by reading the code only.
+
 ## Architecture cheat sheet
 
 - `LogLens/App/LogLensApp.swift` — `@main`, WindowGroup, Capture command menu (⌘R record, ⌘K clear, ⇧⌘T auto-scroll, ⌥⌘I inspector).
-- `LogLens/Store/EventStore.swift` — `@MainActor @Observable`, the single hub. `entries` (ring buffer, `maxEntries` 100k), `filtered` (what UI renders), facet counts, `filter: LogFilter`, `selection` (**`didSet` force-opens the inspector — timeline code must never set it**), `viewMode` (table/timeline, persisted), `timelineExpandAll` (persisted), `timeline: TimelineFeed`, `lanes: [TimelineLane]`. Batches arrive via `LogStreamer.onBatch` every 100 ms into `append(_:)` — the single funnel that also feeds timeline + lanes. `refilter()`/`clear()` reset feeds. Persistence = manual `UserDefaults` in `didSet` (keys: scope, customPredicate, captureLevel, maxEntries, viewMode, timelineExpandAll). **didSet doesn't fire in init** — init restores manually.
+- `LogLens/Store/EventStore.swift` — `@MainActor @Observable`, the single hub. `entries` (ring buffer, `maxEntries` 100k), `filtered` (what UI renders), facet counts, `filter: LogFilter`, `selection` (**`didSet` force-opens the inspector — timeline code must never set it**), `viewMode` (table/timeline, persisted; a stale "network" value falls back to table), `timelineExpandAll` (persisted), `timeline: TimelineFeed`, `lanes: [TimelineLane]`. Batches arrive via `LogStreamer.onBatch` every 100 ms into `append(_:)` — the single funnel that also feeds timeline + lanes. `refilter()`/`clear()` reset feeds. Persistence = manual `UserDefaults` in `didSet` (keys: scope, customPredicate, captureLevel, maxEntries, viewMode, timelineExpandAll). **didSet doesn't fire in init** — init restores manually.
 - `LogLens/Store/TimelineFeed.swift` — pacing engine. Queues entries, reveals on a spring at 350→80 ms cadence, skips ahead past a 60-deep queue (`skipped` count), caps `visible` at 200 cards. Reveal animation `.spring(duration: 0.35, bounce: 0.15)` **must match** the scroll animation in `TimelineScroll` or the glide stutters.
 - `LogLens/Store/TimelineLane.swift` — lane = facet set + own feed + cached matcher (global filter with facets swapped).
-- `LogLens/Store/LogFilter.swift` — `Facet` enum (process/subsystem/category), `makeMatcher`. Plain sidebar click = exclusive-within-kind (radio); ⌘-click combines. Hugo asked about multi-select; told him about ⌘-click; offered plain-click-toggle change — **undecided**.
+- `LogLens/Store/LogFilter.swift` — `Facet` enum (process/subsystem/category), `makeMatcher`. Plain sidebar click toggles (checkbox semantics, Hugo's request); "Only This" in the context menu is the exclusive-within-kind path.
 - `LogLens/Models/` — `LogEntry` (id-only equality), `ParsedMessage` (title/summary/fields/groups/freeText), `LogLevel` (color/symbol), `EventSemantics.swift` (derived `eventType`, `eid`, `EventTypeStyle` colors: **impression=blue, click/tap/select=green** per Hugo, rest orange/red/purple/teal…, FNV-1a fallback — never `String.hashValue`, it's seeded per launch; SF Symbol per type).
 - `LogLens/Parsing/MessageParser.swift` — heuristics: `Key: Value` lines, Swift-description groups, dotted titles (`cart.checkout_button.click` → type "click").
 - `LogLens/Views/` — `ContentView.swift` (NavigationSplitView + toolbar incl. view-mode segmented control, Split + Expand All toggles in timeline mode, inspector gated to table mode), `Table/EventTableView.swift`, `Timeline/EventTimelineView.swift` (`TimelineScroll` reusable column, `IncomingIndicator` pulsing dots + "+N incoming"), `Timeline/TimelineCard.swift` (`TimelineRow` centered connector, card with icon chip + tag capsule), `Components/` (`LevelBadge`, `TagBadge`, `KeyValueGrid`), `Sidebar/SidebarView.swift`, `Detail/EventDetailView.swift`.
@@ -44,7 +55,7 @@ LogLens is a macOS 15 SwiftUI app (owner: Hugo Prinsloo) that live-captures OSLo
 
 ## Network inspector MVP (built 2026-08-28, uncommitted, not yet shown to Hugo)
 
-Proxyman-style zero-code capture of simulator HTTP(S) traffic with full bodies. No SDK, no app changes. Third view mode ("Network", `network` symbol) next to List/Timeline. Hugo has NOT seen it yet — expect visual feedback before committing/shipping.
+Proxyman-style zero-code capture of simulator HTTP(S) traffic with full bodies. No SDK, no app changes. Originally a third view mode; **removed 2026-08-28 evening** — see "Single recording" above. The internals below still apply.
 
 **How it works (files under `LogLens/Network/` + `Store/NetworkStore.swift` + `Views/Network/`):**
 - `CertificateAuthority.swift` — P-256 root CA persisted at `~/Library/Application Support/LogLens/CA/LogLens-Root-CA{,-key}.pem` (10 y). Mints per-host leaf certs (397-day validity, SAN, serverAuth) and caches one `NIOSSLContext` per host. Server + client TLS contexts advertise ALPN `http/1.1` only → never HTTP/2.
@@ -83,5 +94,4 @@ Hugo asked for tap-to-copy-PNG, then clarified it must be **opt-in**: a toolbar 
 ## Open threads
 
 - Hugo's feedback loop on the network inspector is ongoing (he asked for: heal button ✓, network cards in timeline ✓, JSON boxes + outcome tag ✓). Likely next asks: body search, HAR export, proactive CA install when a simulator boots mid-capture (currently heals on first failure), filtering Apple daemon noise (storekitd) by default.
-- Possible plain-click multi-select for sidebar facets (checkbox semantics) — offered, unanswered.
 - 4-lane layout on small windows may need min-width/horizontal scroll — flagged, unrequested.
