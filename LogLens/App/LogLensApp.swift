@@ -4,6 +4,7 @@ import SwiftUI
 struct LogLensApp: App {
     @State private var store: EventStore
     @State private var network: NetworkStore
+    @State private var updates = UpdateChecker()
 
     init() {
         let store = EventStore()
@@ -21,11 +22,17 @@ struct LogLensApp: App {
             ContentView()
                 .environment(store)
                 .environment(network)
+                .environment(updates)
                 .frame(minWidth: 1000, minHeight: 600)
+                .task { updates.checkOnLaunchIfDue() }
         }
         .defaultSize(width: 1400, height: 860)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updates.checkNow() }
+                    .disabled(updates.isChecking)
+            }
             CommandMenu("Capture") {
                 Button(store.isCapturing ? "Stop Recording" : "Record") { store.toggleCapture() }
                     .keyboardShortcut("r", modifiers: .command)

@@ -131,7 +131,7 @@ struct EmptyStateView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     step(1, "Pick a booted simulator (or This Mac) in the toolbar.")
                     step(2, "Press **Record** (⌘R) and use the app.")
-                    step(3, "Click apps, subsystems or categories in the sidebar to filter. ⌘-click to combine.")
+                    step(3, "Click apps, subsystems or categories in the sidebar to filter. Click again to remove one.")
                 }
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 460, alignment: .leading)

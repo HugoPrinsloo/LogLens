@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(EventStore.self) private var store
     @Environment(NetworkStore.self) private var network
+    @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
     @State private var isExporting = false
     @State private var exportFiltered = true
@@ -14,6 +15,9 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 380)
         } detail: {
             VStack(spacing: 0) {
+                if let release = updates.availableUpdate {
+                    UpdateBanner(release: release)
+                }
                 if let error = store.captureError {
                     ErrorBanner(message: error) { store.dismissError() }
                 }
@@ -49,6 +53,9 @@ struct ContentView: View {
         .onChange(of: searchText) { _, new in store.updateFilter { $0.searchText = new } }
         .toolbar { CaptureToolbar(isExporting: $isExporting, exportFiltered: $exportFiltered) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in store.stopCapture() }
+        .alert(item: Binding(get: { updates.manualResult }, set: { updates.manualResult = $0 })) { result in
+            Alert(title: Text(result.title), message: Text(result.message))
+        }
         .fileExporter(
             isPresented: $isExporting,
             document: ExportDocument(data: store.exportData(onlyFiltered: exportFiltered)),
@@ -279,6 +286,32 @@ struct LevelMenu: View {
 }
 
 // MARK: - Banners & status
+
+/// "A newer LogLens is out": download the dmg, read the notes, or skip this version.
+struct UpdateBanner: View {
+    @Environment(UpdateChecker.self) private var updates
+    let release: UpdateChecker.Release
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.accentColor)
+            Text("LogLens \(release.version) is available.").font(.callout.weight(.medium))
+            Text("You have \(updates.currentVersion).").font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            Button("Release Notes") { updates.openReleaseNotes(release) }
+                .buttonStyle(.borderless)
+            Button("Download") { updates.download(release) }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            Button { updates.skipAvailableUpdate() } label: { Image(systemName: "xmark") }
+                .buttonStyle(.borderless)
+                .help("Skip this version")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.12))
+    }
+}
 
 struct ErrorBanner: View {
     let message: String
