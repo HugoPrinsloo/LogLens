@@ -10,7 +10,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
     # Personal Apple Developer team (Hugo Prinsloo). Debug builds sign with "Apple Development";
     # release builds are exported with "Developer ID Application" by scripts/release.sh.
