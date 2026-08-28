@@ -1,6 +1,6 @@
 # LogLens — Agent Handoff
 
-_Last updated: 2026-08-28 (later session). Adds the network inspector MVP (uncommitted). Earlier that day: animated timeline shipped as v1.1.0, split-timeline lanes prototyped._
+_Last updated: 2026-08-28 (evening). **v1.2.0 released** with the network inspector, split timeline lanes, network cards in the timeline, and copy-as-image. Tree is clean._
 
 ## What this app is
 
@@ -9,13 +9,11 @@ LogLens is a macOS 15 SwiftUI app (owner: Hugo Prinsloo) that live-captures OSLo
 ## Repo / branch state right now
 
 - Branch: `develop` (the only branch; releases are cut from it).
-- `v1.1.0` is released (tag + GitHub release, notarized dmg/zip) — includes the whole timeline feature.
-- **Uncommitted work in the tree, part 2** (built, verified end-to-end, NOT committed): the **network inspector MVP** — see the dedicated section below. Suggested commit message: `Network inspector: MITM proxy with zero-code simulator HTTPS capture`. It shares `project.pbxproj`/`LogLensApp.swift` edits with the lanes work, so commit lanes first (or together).
-- **Uncommitted work in the tree, part 1** (built, verified working, NOT yet committed or released): split-timeline lanes.
+- `v1.2.0` is released (2026-08-28, commit `8fb3c2f`, notarized dmg/zip at https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.2.0): network inspector, split lanes, network cards in timeline, copy-as-image. Everything below describing "uncommitted" work landed in commit `f5164a8`.
+- Split-timeline lanes (shipped in 1.2.0):
   - Files: `LogLens/Store/TimelineLane.swift` (new), plus edits to `EventStore.swift`, `EventTimelineView.swift`, `SidebarView.swift`, `ContentView.swift`, and the regenerated `project.pbxproj`.
   - What it does: up to 4 side-by-side timeline lanes, each with its own facet set and its own paced feed. Toolbar "Split" toggle (timeline mode) creates 2 lanes (lane 1 = current sidebar facets, lane 2 = everything); sidebar right-click → "Timeline Lanes" assigns facets to lanes; lane headers have ✕ to close; `--split` launch flag opens pre-split.
-  - Suggested commit message: `Split timeline: up to 4 side-by-side lanes with per-lane facets`
-  - Hugo has NOT yet confirmed he's happy with the split UX — he saw instructions + my screenshot but may want tweaks before committing/shipping.
+  - Hugo used Split with Network | EventBus lanes during the session, so the UX is at least workable; no explicit feedback on it.
 
 ## Architecture cheat sheet
 
@@ -84,7 +82,6 @@ Hugo asked for tap-to-copy-PNG, then clarified it must be **opt-in**: a toolbar 
 
 ## Open threads
 
-- Show Hugo the network inspector (screenshot), iterate on taste, then commit + ship (bump `MARKETING_VERSION` to 1.2.0 via `release.sh 1.2.0`; release needs a clean tree so commit lanes + network first).
-- Commit (and possibly ship) the split-lanes work after Hugo confirms the UX.
+- Hugo's feedback loop on the network inspector is ongoing (he asked for: heal button ✓, network cards in timeline ✓, JSON boxes + outcome tag ✓). Likely next asks: body search, HAR export, proactive CA install when a simulator boots mid-capture (currently heals on first failure), filtering Apple daemon noise (storekitd) by default.
 - Possible plain-click multi-select for sidebar facets (checkbox semantics) — offered, unanswered.
 - 4-lane layout on small windows may need min-width/horizontal scroll — flagged, unrequested.
