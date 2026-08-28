@@ -103,8 +103,10 @@ final class ProxyServer {
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.socketOption(.tcp_nodelay), value: 1)
-            .childChannelInitializer { [unowned self] channel in
-                channel.pipeline.configureHTTPServerPipeline(
+            .childChannelInitializer { [weak self] channel in
+                // The server can be stopped while accepted connections are still draining; never touch a dead one.
+                guard let self else { return channel.close() }
+                return channel.pipeline.configureHTTPServerPipeline(
                     withPipeliningAssistance: true,
                     withErrorHandling: false,
                     withOutboundHeaderValidation: false
@@ -151,7 +153,10 @@ final class ProxyHTTPHandler: ChannelInboundHandler, RemovableChannelHandler {
 
     enum Mode { case plain, tls(host: String, port: Int) }
 
-    private unowned let server: ProxyServer
+    /// Strong on purpose: `ProxyServer.stop()` closes the listener, but accepted connections keep reading until the
+    /// event-loop group finishes shutting down. An `unowned` reference here crashed on the next upstream response
+    /// after Stop (swift_abortRetainUnowned in `shouldRecord`).
+    private let server: ProxyServer
     private let mode: Mode
     private var owner: ProcessLookup.Owner?
     private var ownerResolved: Bool

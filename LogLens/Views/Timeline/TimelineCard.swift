@@ -2,7 +2,7 @@ import SwiftUI
 
 /// One timeline entry: a centered card, linked to the previous one by a short
 /// vertical connector segment.
-struct TimelineRow: View {
+struct TimelineRow: View, Equatable {
     static let cardMaxWidth: CGFloat = 640
     static let connectorHeight: CGFloat = 26
 
@@ -10,6 +10,11 @@ struct TimelineRow: View {
     let isFirst: Bool
     let isExpanded: Bool
     let toggle: () -> Void
+
+    /// The closure would otherwise make every row look "changed" on each reveal, re-laying out all 200 cards.
+    static func == (l: Self, r: Self) -> Bool {
+        l.item.id == r.item.id && l.isFirst == r.isFirst && l.isExpanded == r.isExpanded
+    }
 
     var body: some View {
         VStack(spacing: 0) {

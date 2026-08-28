@@ -53,6 +53,11 @@ final class NetworkStore {
     private var ca: CertificateAuthority?
     private var proxy: ProxyServer?
     private let systemProxy = SystemProxy()
+    /// `networksetup` calls take seconds in total; they run here, serially (so a Stop's restore always lands
+    /// before the next Start's apply), never on the main thread.
+    private static let proxyQueue = DispatchQueue(label: "com.hugoprinsloo.LogLens.systemproxy", qos: .userInitiated)
+    /// Bumped by every start/stop so a start that was overtaken by a stop rolls itself back.
+    private var generation = 0
     private var signalSources: [DispatchSourceSignal] = []
     private var dumpHandle: FileHandle?
 
@@ -76,13 +81,15 @@ final class NetworkStore {
     // MARK: - Lifecycle
 
     func toggleCapture() {
-        if isCapturing { stop() } else { Task { await start() } }
+        if isCapturing { Task { await stopCapture() } } else { Task { await start() } }
     }
 
     func start() async {
         guard !isCapturing, !isStarting else { return }
         isStarting = true
         error = nil
+        generation += 1
+        let gen = generation
         defer { isStarting = false }
         do {
             let ca = try self.ca ?? CertificateAuthority.load()
@@ -91,7 +98,11 @@ final class NetworkStore {
             caPath = ca.certificatePath
 
             let proxy = ProxyServer(ca: ca, policy: policy)
-            proxy.onEvent = { [weak self] event in self?.handle(event) }
+            // Events from a proxy that has since been stopped/replaced are dropped.
+            proxy.onEvent = { [weak self, weak proxy] event in
+                guard let self, let proxy, proxy === self.proxy else { return }
+                handle(event)
+            }
             proxy.setBypassHosts(bypassHosts)
             proxy.onBypassLearned = { [weak self] host in self?.bypassHosts.insert(host) }
             proxy.onTrustProblem = { [weak self] host in self?.handleTrustProblem(host) }
@@ -102,7 +113,17 @@ final class NetworkStore {
             let installed = await SimulatorTrust.installInBootedSimulators(certificatePath: ca.certificatePath, fingerprint: ca.fingerprint)
             if !installed.isEmpty { trustedSimulators = installed }
 
-            try systemProxy.apply(port: port)
+            statusLine = "Pointing the Mac's proxy settings at LogLens…"
+            let port = self.port
+            try await onProxyQueue { [systemProxy] in try systemProxy.apply(port: port) }
+            guard gen == generation, self.proxy === proxy else {
+                // Stopped while we were starting: undo.
+                proxy.stop()
+                if self.proxy === proxy { self.proxy = nil }
+                try? await onProxyQueue { [systemProxy] in systemProxy.restore() }
+                statusLine = "Proxy idle"
+                return
+            }
             isCapturing = true
             statusLine = "Proxy on 127.0.0.1:\(String(port))"
             Self.log.info("Network capture started on port \(self.port)")
@@ -111,18 +132,37 @@ final class NetworkStore {
             statusLine = "Proxy failed to start"
             proxy?.stop()
             proxy = nil
-            systemProxy.restore()
+            try? await onProxyQueue { [systemProxy] in systemProxy.restore() }
         }
     }
 
+    /// User-initiated stop: tears the proxy down now and restores the Mac proxy off the main thread.
+    func stopCapture() async {
+        guard isCapturing || proxy != nil || isStarting else { return }
+        generation += 1
+        proxy?.stop()
+        proxy = nil
+        isCapturing = false
+        statusLine = "Restoring the Mac's proxy settings…"
+        try? await onProxyQueue { [systemProxy] in systemProxy.restore() }
+        if !isCapturing, !isStarting { statusLine = "Proxy idle" }
+        Self.log.info("Network capture stopped")
+    }
+
+    /// Synchronous stop for quit / SIGTERM: the process is about to exit, so the restore must finish right here.
     func stop() {
-        guard isCapturing || proxy != nil else { return }
-        systemProxy.restore()
+        generation += 1
         proxy?.stop()
         proxy = nil
         isCapturing = false
         statusLine = "Proxy idle"
-        Self.log.info("Network capture stopped")
+        Self.proxyQueue.sync { [systemProxy] in systemProxy.restore() }
+    }
+
+    private func onProxyQueue<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { c in
+            Self.proxyQueue.async { c.resume(with: Result { try work() }) }
+        }
     }
 
     /// "Heal": tear everything down and bring it back up — restores the Mac proxy, forgets learned pinned hosts,
@@ -130,7 +170,7 @@ final class NetworkStore {
     func repair() async {
         guard !isStarting else { return }
         error = nil
-        stop()
+        await stopCapture()
         bypassHosts.removeAll()
         UserDefaults.standard.removeObject(forKey: "networkCAInstalledSimulators")
         statusLine = "Healing…"

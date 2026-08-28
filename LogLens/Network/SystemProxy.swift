@@ -46,12 +46,14 @@ final class SystemProxy {
         Self.persist(snap)
         snapshot = snap
         startWatchdog(for: snap)
-        for s in snap.services {
-            try Self.run(["-setwebproxy", s.service, "127.0.0.1", String(port)])
-            try Self.run(["-setsecurewebproxy", s.service, "127.0.0.1", String(port)])
-            try Self.run(["-setwebproxystate", s.service, "on"])
-            try Self.run(["-setsecurewebproxystate", s.service, "on"])
-        }
+        // Each `-set…` call takes a good fraction of a second; services are independent, so run them side by side.
+        let failures = Self.runPerService(snap.services.map { s in [
+            ["-setwebproxy", s.service, "127.0.0.1", String(port)],
+            ["-setsecurewebproxy", s.service, "127.0.0.1", String(port)],
+            ["-setwebproxystate", s.service, "on"],
+            ["-setsecurewebproxystate", s.service, "on"],
+        ] })
+        if let first = failures.first { throw first }
         Self.log.info("System proxy set to 127.0.0.1:\(port) on \(snap.services.count) service(s)")
     }
 
@@ -79,22 +81,38 @@ final class SystemProxy {
     // MARK: - Internals
 
     private static func restore(_ snap: Snapshot) {
-        for cmd in restoreCommands(snap) {
-            do { try run(cmd) } catch { log.error("restore failed: \(cmd.joined(separator: " ")) — \(error.localizedDescription)") }
-        }
+        let failures = runPerService(snap.services.map(restoreCommands))
+        for error in failures { log.error("restore failed: \(error.localizedDescription)") }
         log.info("System proxy restored for \(snap.services.count) service(s)")
+    }
+
+    /// Runs each service's command list in order, with the services in parallel. Returns the errors, if any.
+    private static func runPerService(_ perService: [[[String]]]) -> [Error] {
+        let lock = NSLock()
+        var errors: [Error] = []
+        DispatchQueue.concurrentPerform(iterations: perService.count) { i in
+            for cmd in perService[i] {
+                do { try run(cmd) } catch {
+                    lock.lock(); errors.append(error); lock.unlock()
+                    break   // later commands for this service would leave it half-configured; the watchdog/next restore retries
+                }
+            }
+        }
+        return errors
     }
 
     /// The exact `networksetup` argument lists that undo `apply`. Shared by in-process restore and the watchdog.
     static func restoreCommands(_ snap: Snapshot) -> [[String]] {
+        snap.services.flatMap(restoreCommands)
+    }
+
+    static func restoreCommands(_ s: ServiceSnapshot) -> [[String]] {
         var cmds: [[String]] = []
-        for s in snap.services {
-            // networksetup refuses an empty server; when the original had none, leave the address alone and just disable.
-            if !s.web.server.isEmpty { cmds.append(["-setwebproxy", s.service, s.web.server, String(s.web.port)]) }
-            cmds.append(["-setwebproxystate", s.service, s.web.enabled ? "on" : "off"])
-            if !s.secure.server.isEmpty { cmds.append(["-setsecurewebproxy", s.service, s.secure.server, String(s.secure.port)]) }
-            cmds.append(["-setsecurewebproxystate", s.service, s.secure.enabled ? "on" : "off"])
-        }
+        // networksetup refuses an empty server; when the original had none, leave the address alone and just disable.
+        if !s.web.server.isEmpty { cmds.append(["-setwebproxy", s.service, s.web.server, String(s.web.port)]) }
+        cmds.append(["-setwebproxystate", s.service, s.web.enabled ? "on" : "off"])
+        if !s.secure.server.isEmpty { cmds.append(["-setsecurewebproxy", s.service, s.secure.server, String(s.secure.port)]) }
+        cmds.append(["-setsecurewebproxystate", s.service, s.secure.enabled ? "on" : "off"])
         return cmds
     }
 

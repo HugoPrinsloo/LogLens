@@ -97,6 +97,7 @@ struct TimelineScroll: View {
                                 }
                             }
                         )
+                        .equatable()
                         .id(item.id)
                         .transition(.asymmetric(
                             insertion: .move(edge: .bottom)
@@ -113,8 +114,10 @@ struct TimelineScroll: View {
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, 24)
             }
-            // Start pinned to the newest event (the seed never fires onChange).
+            // Pinned to the newest event. While auto-scroll is on the scroll view itself keeps the bottom anchored as
+            // content grows, which is far cheaper than a `scrollTo` per reveal (that forced a full layout of every card).
             .defaultScrollAnchor(.bottom)
+            .defaultScrollAnchor(store.autoScroll ? .bottom : nil, for: .sizeChanges)
             .overlay {
                 if feed.visible.isEmpty, !store.isCapturing {
                     Text("No matching events")
@@ -126,12 +129,6 @@ struct TimelineScroll: View {
             // count stops changing while events keep flowing.
             // Same spring as TimelineFeed.revealNext, so the stack glides up in
             // sync with the new card sliding in.
-            .onChange(of: feed.visible.last?.id) { _, _ in
-                guard store.autoScroll, feed.visible.last != nil else { return }
-                withAnimation(.spring(duration: 0.35, bounce: 0.15)) {
-                    scrollToNewest(proxy)
-                }
-            }
             .onChange(of: store.autoScroll) { _, on in
                 guard on, feed.visible.last != nil else { return }
                 scrollToNewest(proxy)

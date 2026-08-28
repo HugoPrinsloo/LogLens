@@ -35,8 +35,20 @@ enum JSONHighlighter {
     private static let literal = Color(red: 0.98, green: 0.75, blue: 0.40) // amber
     private static let punctuation = Color.secondary
 
-    /// Single pass over the text: strings (key vs. value decided by the next non-space char), numbers, literals, punctuation.
+    private final class Box { let value: AttributedString; init(_ v: AttributedString) { value = v } }
+    private static let cache: NSCache<NSString, Box> = { let c = NSCache<NSString, Box>(); c.countLimit = 600; return c }()
+
+    /// Cached per text: cards re-render often and the pass below is O(n) over characters.
     static func attributed(_ text: String) -> AttributedString {
+        let key = text as NSString
+        if let hit = cache.object(forKey: key) { return hit.value }
+        let result = highlight(text)
+        cache.setObject(Box(result), forKey: key)
+        return result
+    }
+
+    /// Single pass over the text: strings (key vs. value decided by the next non-space char), numbers, literals, punctuation.
+    private static func highlight(_ text: String) -> AttributedString {
         var out = AttributedString()
         let chars = Array(text)
         var i = 0

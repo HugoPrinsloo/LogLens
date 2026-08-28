@@ -36,15 +36,8 @@ struct ContentView: View {
                 get: { store.showInspector && store.viewMode == .table },
                 set: { store.showInspector = $0 }
             )) {
-                Group {
-                    // A network row gets the full request inspector (headers, raw bodies) while the proxy still holds it.
-                    if let entry = store.selectedEntry, entry.isNetwork, let tx = network.transaction(id: entry.id - LogEntry.networkIDBase) {
-                        NetworkDetailView(tx: tx)
-                    } else {
-                        EventDetailView()
-                    }
-                }
-                .inspectorColumnWidth(min: 320, ideal: 400, max: 800)
+                InspectorContent()
+                    .inspectorColumnWidth(min: 320, ideal: 400, max: 800)
             }
         }
         .navigationTitle("LogLens")
@@ -56,9 +49,11 @@ struct ContentView: View {
         .alert(item: Binding(get: { updates.manualResult }, set: { updates.manualResult = $0 })) { result in
             Alert(title: Text(result.title), message: Text(result.message))
         }
+        // Only build the document while the panel is up: encoding every entry on each body evaluation
+        // was re-serialising the whole buffer on every incoming batch.
         .fileExporter(
             isPresented: $isExporting,
-            document: ExportDocument(data: store.exportData(onlyFiltered: exportFiltered)),
+            document: isExporting ? ExportDocument(data: store.exportData(onlyFiltered: exportFiltered)) : nil,
             contentType: .json,
             defaultFilename: "LogLens-\(Formatters.fullMillis.string(from: Date()).prefix(19).replacingOccurrences(of: ":", with: "-"))"
         ) { _ in }
@@ -67,6 +62,21 @@ struct ContentView: View {
     private var subtitle: String {
         guard store.isCapturing else { return "Idle" }
         return network.isCapturing ? "Recording \(store.selectedSource.name) + HTTP(S)" : "Recording \(store.selectedSource.name)"
+    }
+}
+
+/// Lives in its own view so `ContentView.body` doesn't depend on `filtered` (which changes on every batch).
+private struct InspectorContent: View {
+    @Environment(EventStore.self) private var store
+    @Environment(NetworkStore.self) private var network
+
+    var body: some View {
+        // A network row gets the full request inspector (headers, raw bodies) while the proxy still holds it.
+        if let entry = store.selectedEntry, entry.isNetwork, let tx = network.transaction(id: entry.id - LogEntry.networkIDBase) {
+            NetworkDetailView(tx: tx)
+        } else {
+            EventDetailView()
+        }
     }
 }
 

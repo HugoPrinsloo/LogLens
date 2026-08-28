@@ -72,7 +72,7 @@ final class EventStore {
             guard captureNetwork != oldValue else { return }
             UserDefaults.standard.set(captureNetwork, forKey: "captureNetwork")
             refilter()
-            if isCapturing { captureNetwork ? startNetwork() : network?.stop() }
+            if isCapturing { captureNetwork ? startNetwork() : stopNetwork() }
         }
     }
     var timelineExpandAll = false {
@@ -132,6 +132,15 @@ final class EventStore {
             }
             // `LogLens --record` starts capturing immediately (handy for scripting and dev).
             if selectBooted, !isCapturing, CommandLine.arguments.contains("--record") { startCapture() }
+            // `LogLens --record-cycle` toggles Record/Stop every 5 s (soak test for the stop/start path).
+            if selectBooted, CommandLine.arguments.contains("--record-cycle") {
+                Task { [weak self] in
+                    while let self {
+                        try? await Task.sleep(for: .seconds(5))
+                        toggleCapture()
+                    }
+                }
+            }
             // `LogLens --split` opens the timeline pre-split into two lanes.
             if selectBooted, CommandLine.arguments.contains("--split") { enableSplit() }
         }
@@ -173,12 +182,17 @@ final class EventStore {
     func stopCapture() {
         streamer.stop()
         isCapturing = false
-        network?.stop()
+        stopNetwork()
     }
 
     private func startNetwork() {
         guard let network else { return }
         Task { await network.start() }
+    }
+
+    private func stopNetwork() {
+        guard let network else { return }
+        Task { await network.stopCapture() }
     }
 
     var commandPreview: String {
