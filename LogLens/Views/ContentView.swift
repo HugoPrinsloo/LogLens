@@ -90,14 +90,6 @@ struct CaptureToolbar: ToolbarContent {
             Button { store.clear() } label: { Label("Clear", systemImage: "trash") }
                 .help("Clear all events (⌘K)")
                 .disabled(store.entries.isEmpty)
-
-            Button {
-                Task { await network.repair() }
-            } label: {
-                Label("Heal", systemImage: "bandage.fill")
-            }
-            .help("Heal the HTTP(S) proxy: restore the Mac proxy, reinstall the certificate in every booted simulator, restart the proxy")
-            .disabled(!store.isCapturing || !store.captureNetwork || network.isStarting)
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
@@ -173,6 +165,10 @@ struct NetworkMenu: View {
         Menu {
             Toggle("Capture HTTP(S) Requests", isOn: Binding(get: { store.captureNetwork }, set: { store.captureNetwork = $0 }))
             Text(network.statusLine).foregroundStyle(.secondary)
+            Divider()
+            // Restore the Mac proxy, reinstall the certificate in every booted simulator, restart the proxy.
+            Button("Heal Connection", systemImage: "bandage.fill") { Task { await network.repair() } }
+                .disabled(!store.isCapturing || !store.captureNetwork || network.isStarting)
             Divider()
             Picker("Decrypt", selection: Binding(get: { network.policy }, set: { network.policy = $0 })) {
                 ForEach(DecryptPolicy.allCases) { Text($0.title).tag($0) }
