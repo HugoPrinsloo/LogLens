@@ -1,6 +1,6 @@
 # LogLens — Agent Handoff
 
-_Last updated: 2026-08-28 (late night). **v1.3.0 released**, then crash + perf fixes committed (see "1.3.0 post-release fixes"; ship as 1.3.1). Earlier: v1.3.0 (commit `333df77`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.0): one recording (Record starts log stream + proxy; Network view mode removed), sidebar click-to-toggle facets + facet search, Heal in the Network toolbar menu, Check for Updates + update banner. Tree is clean. Release notes now live in `docs/releases/<version>.md` and `release.sh` uses that file when present (else GitHub generated notes)._
+_Last updated: 2026-08-28 (late night). **v1.3.1 released** (commit `523b915`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.1): crash + perf fixes, see "1.3.0 post-release fixes". Tree clean. Earlier: v1.3.0 (commit `333df77`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.0): one recording (Record starts log stream + proxy; Network view mode removed), sidebar click-to-toggle facets + facet search, Heal in the Network toolbar menu, Check for Updates + update banner. Tree is clean. Release notes now live in `docs/releases/<version>.md` and `release.sh` uses that file when present (else GitHub generated notes)._
 
 ## What this app is
 
@@ -15,7 +15,7 @@ LogLens is a macOS 15 SwiftUI app (owner: Hugo Prinsloo) that live-captures OSLo
   - What it does: up to 4 side-by-side timeline lanes, each with its own facet set and its own paced feed. Toolbar "Split" toggle (timeline mode) creates 2 lanes (lane 1 = current sidebar facets, lane 2 = everything); sidebar right-click → "Timeline Lanes" assigns facets to lanes; lane headers have ✕ to close; `--split` launch flag opens pre-split.
   - Hugo used Split with Network | EventBus lanes during the session, so the UX is at least workable; no explicit feedback on it.
 
-## 1.3.0 post-release fixes (2026-08-28 night, committed after v1.3.0, unreleased until 1.3.1)
+## 1.3.0 post-release fixes (2026-08-28 night, shipped as v1.3.1)
 
 Hugo's feedback on 1.3.0: "something is hammering performance, the timeline no longer shows logs live, new events only appear when I scroll" + "crashes when I use multiview". Diagnosed with `sample <pid> 8` (main-thread tree + "Total number in stack") and the `.ips` reports in `~/Library/Logs/DiagnosticReports`.
 
