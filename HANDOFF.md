@@ -1,6 +1,6 @@
 # LogLens — Agent Handoff
 
-_Last updated: 2026-08-28 (late evening). **v1.2.0 released**; since then (uncommitted → committed on `develop`, not yet released): **one recording** (Record starts log stream + proxy; Network view mode removed), sidebar click-to-toggle facets + facet search; Heal lives in the Network toolbar menu. See "Single recording" below._
+_Last updated: 2026-08-28 (night). **v1.3.0 released** (commit `333df77`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.0): one recording (Record starts log stream + proxy; Network view mode removed), sidebar click-to-toggle facets + facet search, Heal in the Network toolbar menu, Check for Updates + update banner. Tree is clean. Release notes now live in `docs/releases/<version>.md` and `release.sh` uses that file when present (else GitHub generated notes)._
 
 ## What this app is
 
@@ -9,7 +9,7 @@ LogLens is a macOS 15 SwiftUI app (owner: Hugo Prinsloo) that live-captures OSLo
 ## Repo / branch state right now
 
 - Branch: `develop` (the only branch; releases are cut from it).
-- `v1.2.0` is released (2026-08-28, commit `8fb3c2f`, notarized dmg/zip at https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.2.0): network inspector, split lanes, network cards in timeline, copy-as-image. Everything below describing "uncommitted" work landed in commit `f5164a8`.
+- `v1.3.0` is released (2026-08-28 night, commit `333df77`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.0). `v1.2.0` (commit `8fb3c2f`): network inspector, split lanes, network cards in timeline, copy-as-image. Everything below describing "uncommitted" work landed in commit `f5164a8`.
 - Split-timeline lanes (shipped in 1.2.0):
   - Files: `LogLens/Store/TimelineLane.swift` (new), plus edits to `EventStore.swift`, `EventTimelineView.swift`, `SidebarView.swift`, `ContentView.swift`, and the regenerated `project.pbxproj`.
   - What it does: up to 4 side-by-side timeline lanes, each with its own facet set and its own paced feed. Toolbar "Split" toggle (timeline mode) creates 2 lanes (lane 1 = current sidebar facets, lane 2 = everything); sidebar right-click → "Timeline Lanes" assigns facets to lanes; lane headers have ✕ to close; `--split` launch flag opens pre-split.
@@ -48,7 +48,7 @@ Hugo: "Recording should always just happen in one place… one single record abi
 - Run for testing: `killall LogLens; open build/Build/Products/Debug/LogLens.app --args --record` (`--record` auto-starts capture on the booted simulator; add `--split` for pre-split timeline).
 - Generate real events: `xcrun simctl terminate booted com.gopotluck.over; xcrun simctl launch booted com.gopotluck.over` — relaunching the Over app produces a burst of ~280 events including EventBus impressions.
 - Visual verification: find the window id with a small `swift -e` CGWindowList snippet (owner == "LogLens"), then `screencapture -o -x -l<id> out.png` and read the image. Fails if the window is on another Space.
-- Release: `./scripts/release.sh <version>` — needs a **clean tree**; sets version in project.yml, archives, Developer ID signs (cloud, team 7VT5H6VPXH), notarizes zip+dmg (keychain profile `LogLens-Notary`), commits "Release vX", pushes, publishes GitHub release. Takes ~5–10 min; run in background.
+- Release: write `docs/releases/<version>.md` first (Hugo wants human-sounding notes with lots of emojis — see 1.3.0.md), commit, then `./scripts/release.sh <version>` — needs a **clean tree**; sets version in project.yml, archives, Developer ID signs (cloud, team 7VT5H6VPXH), notarizes zip+dmg (keychain profile `LogLens-Notary` or `NetworkBlocker-Notary`, whichever exists), commits "Release vX", pushes, publishes GitHub release with the notes file. Takes ~5–10 min; run in background and watch `build/release-<version>.log`.
 
 ## Hugo's working style & taste (learned the hard way)
 
