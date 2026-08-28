@@ -117,18 +117,6 @@ private struct EntryDetail: View {
     }
 }
 
-private struct LevelBadge: View {
-    let level: LogLevel
-    var body: some View {
-        Text(level.name.uppercased())
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(level.color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(level.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
-    }
-}
-
 private struct DetailSection<Content: View>: View {
     let title: String
     let symbol: String
@@ -160,29 +148,5 @@ private struct DetailSection<Content: View>: View {
                 content()
             }
         }
-    }
-}
-
-private struct KeyValueGrid: View {
-    let fields: [ParsedMessage.Field]
-
-    var body: some View {
-        Grid(alignment: .topLeading, horizontalSpacing: 12, verticalSpacing: 6) {
-            ForEach(fields) { f in
-                GridRow {
-                    Text(f.key.isEmpty ? "•" : f.key)
-                        .foregroundStyle(.secondary)
-                        .font(.callout)
-                        .frame(minWidth: 70, alignment: .trailing)
-                        .gridColumnAlignment(.trailing)
-                    Text(f.value)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
     }
 }

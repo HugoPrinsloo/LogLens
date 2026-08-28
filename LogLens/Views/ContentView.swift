@@ -16,11 +16,18 @@ struct ContentView: View {
                 if let error = store.captureError {
                     ErrorBanner(message: error) { store.dismissError() }
                 }
-                EventTableView()
+                switch store.viewMode {
+                case .table: EventTableView()
+                case .timeline: EventTimelineView()
+                }
                 Divider()
                 StatusBar()
             }
-            .inspector(isPresented: $store.showInspector) {
+            // Timeline cards expand in place, so the inspector only applies to the table.
+            .inspector(isPresented: Binding(
+                get: { store.showInspector && store.viewMode == .table },
+                set: { store.showInspector = $0 }
+            )) {
                 EventDetailView()
                     .inspectorColumnWidth(min: 320, ideal: 420, max: 700)
             }
@@ -53,6 +60,14 @@ struct CaptureToolbar: ToolbarContent {
         }
 
         ToolbarItemGroup(placement: .principal) {
+            Picker("View", selection: Binding(get: { store.viewMode }, set: { store.viewMode = $0 })) {
+                ForEach(EventViewMode.allCases) { m in
+                    Image(systemName: m.symbol).tag(m).help(m.title)
+                }
+            }
+            .pickerStyle(.segmented)
+            .help("Switch between list and timeline view")
+
             Button {
                 store.toggleCapture()
             } label: {
@@ -67,6 +82,13 @@ struct CaptureToolbar: ToolbarContent {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
+            if store.viewMode == .timeline {
+                Toggle(isOn: Binding(get: { store.timelineExpandAll }, set: { store.timelineExpandAll = $0 })) {
+                    Label("Expand All", systemImage: store.timelineExpandAll ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
+                }
+                .help(store.timelineExpandAll ? "Show new events collapsed" : "Show all events expanded")
+            }
+
             ScopeMenu()
             LevelMenu()
 
@@ -94,6 +116,7 @@ struct CaptureToolbar: ToolbarContent {
                 Label("Inspector", systemImage: "sidebar.trailing")
             }
             .help("Toggle inspector (⌥⌘I)")
+            .disabled(store.viewMode == .timeline)
         }
     }
 }

@@ -2,6 +2,13 @@ import Foundation
 import Observation
 import SwiftUI
 
+enum EventViewMode: String, CaseIterable, Identifiable {
+    case table, timeline
+    var id: String { rawValue }
+    var title: String { self == .table ? "List" : "Timeline" }
+    var symbol: String { self == .table ? "list.bullet" : "rectangle.stack" }
+}
+
 @MainActor
 @Observable
 final class EventStore {
@@ -36,6 +43,17 @@ final class EventStore {
     var autoScroll = true
     var showInspector = true
 
+    let timeline = TimelineFeed()
+    var viewMode: EventViewMode = .table {
+        didSet {
+            UserDefaults.standard.set(viewMode.rawValue, forKey: "viewMode")
+            timeline.setActive(viewMode == .timeline, seed: filtered)
+        }
+    }
+    var timelineExpandAll = false {
+        didSet { UserDefaults.standard.set(timelineExpandAll, forKey: "timelineExpandAll") }
+    }
+
     var selectedEntry: LogEntry? {
         guard let selection else { return nil }
         // Selected rows are almost always near the end; search backwards.
@@ -54,6 +72,10 @@ final class EventStore {
         customPredicate = d.string(forKey: "customPredicate") ?? ""
         if d.object(forKey: "captureLevel") != nil, let l = LogLevel(rawValue: d.integer(forKey: "captureLevel")) { captureLevel = l }
         if d.object(forKey: "maxEntries") != nil { maxEntries = max(1_000, d.integer(forKey: "maxEntries")) }
+        if let raw = d.string(forKey: "viewMode"), let m = EventViewMode(rawValue: raw) { viewMode = m }
+        timelineExpandAll = d.bool(forKey: "timelineExpandAll")
+        // didSet doesn't fire during init.
+        timeline.setActive(viewMode == .timeline, seed: [])
 
         streamer.onBatch = { [weak self] batch in self?.append(batch) }
         streamer.onTerminate = { [weak self] status, stderr, expected in
@@ -140,7 +162,10 @@ final class EventStore {
             categoryCounts[e.category, default: 0] += 1
         }
         let matches = batch.filter(matcher)
-        if !matches.isEmpty { filtered.append(contentsOf: matches) }
+        if !matches.isEmpty {
+            filtered.append(contentsOf: matches)
+            timeline.ingest(matches)
+        }
         trimIfNeeded()
         updateRate(added: batch.count)
     }
@@ -184,6 +209,7 @@ final class EventStore {
         selection = nil
         rateWindow.removeAll()
         eventsPerSecond = 0
+        timeline.reset(seed: [])
     }
 
     // MARK: - Filtering
@@ -219,6 +245,7 @@ final class EventStore {
     private func refilter() {
         matcher = filter.makeMatcher(starred: starred)
         filtered = filter.isActive ? entries.filter(matcher) : entries
+        timeline.reset(seed: filtered)
     }
 
     // MARK: - Starring

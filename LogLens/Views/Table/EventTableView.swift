@@ -111,7 +111,7 @@ private struct EventCell: View {
     }
 }
 
-private struct EmptyStateView: View {
+struct EmptyStateView: View {
     @Environment(EventStore.self) private var store
 
     var body: some View {
