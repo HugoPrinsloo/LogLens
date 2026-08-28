@@ -1,9 +1,72 @@
 import SwiftUI
 
 /// Animated vertical timeline: new events slide in from the bottom at the pace
-/// set by `TimelineFeed`, linked by a thin connector line.
+/// set by `TimelineFeed`, linked by a thin connector line. Shows either the
+/// single global feed or up to four side-by-side lanes with their own facets.
 struct EventTimelineView: View {
     @Environment(EventStore.self) private var store
+
+    var body: some View {
+        Group {
+            if store.entries.isEmpty {
+                EmptyStateView()
+            } else if store.lanes.isEmpty {
+                if store.filtered.isEmpty {
+                    ContentUnavailableView.search(text: store.filter.searchText)
+                } else {
+                    TimelineScroll(feed: store.timeline, horizontalPadding: 24)
+                }
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(store.lanes) { lane in
+                        VStack(spacing: 0) {
+                            LaneHeader(lane: lane)
+                            Divider()
+                            TimelineScroll(feed: lane.feed, horizontalPadding: 12)
+                        }
+                        if lane.id != store.lanes.last?.id { Divider() }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct LaneHeader: View {
+    @Environment(EventStore.self) private var store
+    let lane: TimelineLane
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                .foregroundStyle(Color.accentColor)
+                .font(.caption)
+            Text(lane.title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 4)
+            Button {
+                store.removeLane(lane)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Close this lane")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.bar)
+    }
+}
+
+/// One scrolling timeline column over a feed.
+struct TimelineScroll: View {
+    @Environment(EventStore.self) private var store
+    let feed: TimelineFeed
+    var horizontalPadding: CGFloat = 24
+
     /// Cards the user has toggled away from the default expansion state.
     @State private var toggledIDs: Set<Int> = []
 
@@ -14,26 +77,13 @@ struct EventTimelineView: View {
     private func scrollToNewest(_ proxy: ScrollViewProxy) {
         if store.isCapturing {
             proxy.scrollTo(Self.incomingID, anchor: .bottom)
-        } else if let last = store.timeline.visible.last {
+        } else if let last = feed.visible.last {
             proxy.scrollTo(last.id, anchor: .bottom)
         }
     }
 
     var body: some View {
-        Group {
-            if store.entries.isEmpty {
-                EmptyStateView()
-            } else if store.filtered.isEmpty {
-                ContentUnavailableView.search(text: store.filter.searchText)
-            } else {
-                timeline
-            }
-        }
-    }
-
-    private var timeline: some View {
-        let feed = store.timeline
-        return ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(feed.visible) { item in
@@ -60,11 +110,18 @@ struct EventTimelineView: View {
                             .id(Self.incomingID)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, 24)
             }
             // Start pinned to the newest event (the seed never fires onChange).
             .defaultScrollAnchor(.bottom)
+            .overlay {
+                if feed.visible.isEmpty, !store.isCapturing {
+                    Text("No matching events")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                }
+            }
             // Track the last id, not the count: once `visible` hits its cap the
             // count stops changing while events keep flowing.
             // Same spring as TimelineFeed.revealNext, so the stack glides up in

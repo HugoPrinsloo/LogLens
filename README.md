@@ -5,14 +5,15 @@
 <h1 align="center">LogLens</h1>
 
 <p align="center">
-  A Mac app for watching what your iOS app logs, live.<br>
+  A Mac app for watching what your iOS app logs and requests, live.<br>
   <a href="https://github.com/HugoPrinsloo/LogLens/releases/latest">Download</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#using-it">Using it</a> &middot;
+  <a href="#network-inspector">Network inspector</a> &middot;
   <a href="#releasing">Releasing</a>
 </p>
 
-Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields.
+Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields. Switch to the timeline and the same events arrive as cards. Turn on the network inspector and the app's HTTP requests show up too, decrypted, with headers and bodies, without touching the app.
 
 ![LogLens capturing events from an iOS simulator](docs/layout.png)
 
@@ -72,9 +73,33 @@ The Scope menu controls what `log stream` emits at the source, so the noisy stuf
 
 The exact command LogLens runs is shown in Settings and on the empty screen, so you can paste it into a terminal if you ever want to double check.
 
+### Timeline
+
+The second icon in the toolbar switches to a vertical timeline. Each event is a card that springs in from the bottom, with the event identifier as the headline, a coloured tag for the type (impressions blue, clicks green) and the fields underneath once you expand it. Expand All opens every card. Split puts up to four lanes next to each other, each with its own apps, subsystems or categories. I keep my analytics events in one lane and the network requests in the other. Right-click anything in the sidebar to send it to a lane.
+
+There's also a Copy as Image toggle. With it on, clicking a card puts a PNG of that card on the clipboard so you can drop it straight into Slack. With it off, clicking expands the card like before.
+
 ### Shortcuts
 
 ⌘R record or stop, ⌘K clear, ⇧⌘T follow newest, ⇧⌘0 reset filters, ⌥⌘I toggle the inspector, ⌘F search.
+
+## Network inspector
+
+This is the part I originally wanted Proxyman for. The third view lists the simulator's HTTP requests. Press Record there and LogLens starts a local proxy, installs its own root certificate into every booted simulator and points the Mac's proxy settings at itself. The simulator picks those settings up on its own, so every HTTPS request an app makes from then on shows up decrypted: method, status, timing, headers, both bodies. JSON gets pretty-printed and gzip unpacked. Select a row to inspect it, or right-click to copy the URL, the body or a cURL command.
+
+![The network inspector showing decrypted requests from the simulator](docs/network-inspector.png)
+
+Finished requests also flow into the log views. In the timeline, a POST to the analytics endpoint lands right after the event that caused it, with the payload in a syntax coloured box, which is the thing I actually wanted to see. The Network toggle in the log toolbar hides them if they get in the way.
+
+![A network request rendered as a timeline card](docs/network-card.png)
+
+Only simulator processes are decrypted by default. The rest of the Mac's traffic still passes through the proxy while capturing, but untouched, so Safari and Slack keep working and you never have to trust the certificate on the Mac. If you do want Mac traffic, Settings has a switch for it, and that one needs the certificate trusted in your login keychain.
+
+Because the proxy setting affects the whole Mac, putting it back is the part I was most paranoid about. Stopping, quitting, or crashing all restore the previous settings. A small watchdog process handles the crash case, and LogLens checks on launch in case even that missed.
+
+Apps that pin their certificate can't be decrypted by any proxy. LogLens notices the first rejection and tunnels that host untouched from then on, so the app keeps working and you get one failed row followed by lock icons. If the simulator was erased and lost the certificate, LogLens reinstalls it on its own. The Heal button in the toolbar tears the whole thing down and sets it up again if something still looks wrong.
+
+Physical devices aren't supported. Neither are WebSockets or HTTP/2; the proxy only offers HTTP/1.1 and every client I've met falls back to it.
 
 ## Getting the most out of the inspector
 
@@ -110,7 +135,7 @@ xcrun simctl spawn <udid> log stream --style ndjson --level debug --type log --p
 
 and reads the JSON lines off stdout. Each line becomes a `LogEntry`, gets parsed, and lands in a ring buffer (100,000 entries by default, adjustable in Settings). Filtering is applied incrementally as entries arrive so the table stays responsive at a few thousand events per second.
 
-There is no network code in the app and nothing phones home. The only things it persists are four preferences. Exports are JSON files you save through the normal panel.
+The network inspector is a local HTTP proxy built on SwiftNIO. It listens on 127.0.0.1 only, mints a certificate per host signed by a root it generates on first use (kept in Application Support) and forwards each request upstream over HTTP/1.1. Nothing phones home. LogLens persists a handful of preferences and that root certificate, nothing else. Exports are JSON files you save through the normal panel.
 
 ## Physical devices
 
@@ -138,10 +163,11 @@ That sets the version in `project.yml`, archives a Release build, exports it wit
 LogLens/
   App/        LogLensApp: scene, menus, shortcuts
   Capture/    LogSource, SourceDiscovery (simctl, devicectl), LogStreamer (log stream to LogEntry)
+  Network/    ProxyServer (SwiftNIO), CertificateAuthority, SystemProxy, SimulatorTrust, ProcessLookup, BodyDecoder
   Parsing/    MessageParser, SwiftDescriptionParser
-  Models/     LogEntry, LogLevel, ParsedMessage
-  Store/      EventStore (@Observable), LogFilter
-  Views/      ContentView, Sidebar, Table, Detail, Settings
+  Models/     LogEntry, LogLevel, ParsedMessage, NetworkTransaction, NetworkLogEntry
+  Store/      EventStore, NetworkStore (@Observable), LogFilter, TimelineFeed, TimelineLane
+  Views/      ContentView, Sidebar, Table, Timeline, Network, Detail, Settings
   Support/    Formatters, ExportDocument, Pasteboard
   Resources/  AppIcon.icon (Liquid Glass layers) and the PNG fallback catalog
 scripts/

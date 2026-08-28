@@ -12,24 +12,45 @@
 		058AD885E282C45E8B293C2F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 59058A1612B26B1AE4AE072C /* Assets.xcassets */; };
 		16BE660B28E6F405C196288E /* LogSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD96E53C4F12C945077F47D8 /* LogSource.swift */; };
 		1DED9ECD75535F9765A492F6 /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D492D47120326C3C2D6224 /* Formatters.swift */; };
+		343A5B8ACD3FB988F6A707B5 /* NetworkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31DB864735E9CD5534C95E53 /* NetworkDetailView.swift */; };
 		362795D86D6520FC0753D892 /* LogFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F48415E8BEB1B851D56ACE13 /* LogFilter.swift */; };
+		3CA9B3A1CBB8962FF68FE162 /* NetworkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D0EB0C2A2AB7FDB70A6220 /* NetworkStore.swift */; };
+		4E66CB1F202BF0D51A7342C7 /* CertificateAuthority.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D45410623C4FF5BFE0D21DB /* CertificateAuthority.swift */; };
 		510B0C44DF165C8255CAAAC0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC67BBA69445F2FD05237229 /* ContentView.swift */; };
+		521781176F95DB2AF32A5F86 /* ProxyServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D16A00E3FFFE9BF2FB68EE9 /* ProxyServer.swift */; };
+		5CF2B41B445F2D2361A58E0E /* SystemProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1866FAD32749779896D1568F /* SystemProxy.swift */; };
 		5DF9CBA8658103AE69857014 /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A51FC4503D3762CEC716E52 /* EventDetailView.swift */; };
 		5EA4D7F705BD030662D5E74A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 347244AD704CD242F00D8449 /* SettingsView.swift */; };
 		620532CA20A180255E8A5787 /* LogLensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6DBF882B2E0A414BDD2131B /* LogLensApp.swift */; };
+		6BC091D9F88E662075960CE3 /* ProcessLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F469587B86BC5C8826CC26 /* ProcessLookup.swift */; };
 		72DE7D1037BED970B703D518 /* LogLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F141422A9CF4AC4427732118 /* LogLevel.swift */; };
 		7657E8EC60D934F2565089CB /* EventTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CF6E1A9193B1C62608B455 /* EventTimelineView.swift */; };
 		7C904E2C1ACA1818BCD6E9E6 /* ExportDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875CA1A6F6AC57F74D49E5EB /* ExportDocument.swift */; };
+		81EE9D06E51B4E98D5DBA1FB /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 74D43DD82933629D0E87C949 /* Crypto */; };
 		828CB51B9767A0072401795F /* ParsedMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C273FF0A1A76B1E1CA418A /* ParsedMessage.swift */; };
+		87E6D746F13C202F9569E777 /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC74831229161C6AB2EC0632 /* NetworkView.swift */; };
 		8DA19DF829963BA519765CE4 /* EventStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FBDDAEB97E6AB6191A6F47D /* EventStore.swift */; };
+		8F8B47D384E598D6CC0CAD88 /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 2277A5349F1D7F32FFD48EAF /* NIOSSL */; };
 		914BFBD25A371E05E71C602C /* MessageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB3B747B30C2340F03840AE /* MessageParser.swift */; };
+		9AE57CDAEDBB9AAAA17DE586 /* NetworkBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F8A2BC70BCEEFAD7E64F6C /* NetworkBadges.swift */; };
+		9B199E100156925FBC624AF6 /* NetworkLogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB17C892D44F1895DF959263 /* NetworkLogEntry.swift */; };
 		AA0646E2440C790F0BB708A1 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B8AB912ADA3AB3919BC3FB47 /* AppIcon.icon */; };
 		AEFD3F4693638184A0495D70 /* EventSemantics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D8CB574EFF06165CADE768B /* EventSemantics.swift */; };
+		B168DD79D29C256F92F5773A /* NetworkTransaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1021B9F7EEAE4EDD5AA7729 /* NetworkTransaction.swift */; };
 		B66B6226FA55ED0F4CE5A6CB /* TimelineFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A64355E8FED1FE84BEBA848D /* TimelineFeed.swift */; };
+		BFF7F1E9162892E13551B506 /* NetworkSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83FE97DFE512587A12D8C99E /* NetworkSidebar.swift */; };
+		C2B013475C794A13CEBEC561 /* BodyDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B64BB89EB7D4191825C0CE6E /* BodyDecoder.swift */; };
 		C3E7A9F444F6ECBB625E1935 /* EventTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4737DE8333CBEF1D56DFB836 /* EventTableView.swift */; };
+		CB4BBFF2B180A143A4069083 /* JSONText.swift in Sources */ = {isa = PBXBuildFile; fileRef = E318EDA43DCBB0F8BBAB8D70 /* JSONText.swift */; };
+		CE48BEB3E7DCE86AB83F4E9E /* SimulatorTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFA9F9A760AC0D401E3A2447 /* SimulatorTrust.swift */; };
+		CEECC7C91B2813E198C2E3C8 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = 3AFAC3DD428908198B154431 /* NIOHTTP1 */; };
+		D0F59F4E4DADAAE18DE6C9C1 /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = 21E6C94669CC4060B84BFAD5 /* X509 */; };
+		D8C9B086AD4FD17BE8842358 /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = 59F6AC37C60F428ED7A89849 /* NIOPosix */; };
+		DA956BBD8E15721835B849A9 /* TimelineLane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189768DC01F0D7958EF72A34 /* TimelineLane.swift */; };
 		E059CBF858F02D4A6D5F3EF8 /* LogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CDE3DF487BFD344E15F6B7 /* LogEntry.swift */; };
 		E1E9BA5BC8CE1C5EC7A0E79E /* SourceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1D2F2CFEEC7B3334867EED /* SourceDiscovery.swift */; };
 		F1F10951C9EF0468F8978198 /* Pasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0AADEA055C5B9DF424DA6D5 /* Pasteboard.swift */; };
+		F2B7CBEFFE679D06C898BA90 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = 32B8C12CA861CC6FC51693BA /* NIOCore */; };
 		F493235F19B639F4E875BE98 /* Badges.swift in Sources */ = {isa = PBXBuildFile; fileRef = 480FA4A0D19C207C128A6F75 /* Badges.swift */; };
 		F6392B70381458C6E4C28D7E /* LogStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6231E80A74B64E5D7CCB0990 /* LogStreamer.swift */; };
 		FB5C52A6C4C422427C75EB8E /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55A9AD83161D785E63F13AB7 /* SidebarView.swift */; };
@@ -39,8 +60,11 @@
 		07CF6E1A9193B1C62608B455 /* EventTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTimelineView.swift; sourceTree = "<group>"; };
 		0B1D2F2CFEEC7B3334867EED /* SourceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDiscovery.swift; sourceTree = "<group>"; };
 		0BB3B747B30C2340F03840AE /* MessageParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageParser.swift; sourceTree = "<group>"; };
+		1866FAD32749779896D1568F /* SystemProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemProxy.swift; sourceTree = "<group>"; };
+		189768DC01F0D7958EF72A34 /* TimelineLane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineLane.swift; sourceTree = "<group>"; };
 		1AFAF1CB9D4C983DA7F634BF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2D8CB574EFF06165CADE768B /* EventSemantics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSemantics.swift; sourceTree = "<group>"; };
+		31DB864735E9CD5534C95E53 /* NetworkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkDetailView.swift; sourceTree = "<group>"; };
 		347244AD704CD242F00D8449 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		3A51FC4503D3762CEC716E52 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
 		3C18A797CA00807770868222 /* TimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineCard.swift; sourceTree = "<group>"; };
@@ -49,22 +73,50 @@
 		480FA4A0D19C207C128A6F75 /* Badges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Badges.swift; sourceTree = "<group>"; };
 		48D492D47120326C3C2D6224 /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
 		4AD132E7D54D53D8E6B43D30 /* LogLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LogLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D16A00E3FFFE9BF2FB68EE9 /* ProxyServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyServer.swift; sourceTree = "<group>"; };
 		55A9AD83161D785E63F13AB7 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		59058A1612B26B1AE4AE072C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6231E80A74B64E5D7CCB0990 /* LogStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogStreamer.swift; sourceTree = "<group>"; };
+		83FE97DFE512587A12D8C99E /* NetworkSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkSidebar.swift; sourceTree = "<group>"; };
 		875CA1A6F6AC57F74D49E5EB /* ExportDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDocument.swift; sourceTree = "<group>"; };
 		8FBDDAEB97E6AB6191A6F47D /* EventStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventStore.swift; sourceTree = "<group>"; };
+		9D45410623C4FF5BFE0D21DB /* CertificateAuthority.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertificateAuthority.swift; sourceTree = "<group>"; };
 		A0AADEA055C5B9DF424DA6D5 /* Pasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pasteboard.swift; sourceTree = "<group>"; };
+		A3F469587B86BC5C8826CC26 /* ProcessLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessLookup.swift; sourceTree = "<group>"; };
 		A4C273FF0A1A76B1E1CA418A /* ParsedMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParsedMessage.swift; sourceTree = "<group>"; };
 		A64355E8FED1FE84BEBA848D /* TimelineFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineFeed.swift; sourceTree = "<group>"; };
+		B1021B9F7EEAE4EDD5AA7729 /* NetworkTransaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkTransaction.swift; sourceTree = "<group>"; };
+		B64BB89EB7D4191825C0CE6E /* BodyDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyDecoder.swift; sourceTree = "<group>"; };
+		B7F8A2BC70BCEEFAD7E64F6C /* NetworkBadges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkBadges.swift; sourceTree = "<group>"; };
 		B8AB912ADA3AB3919BC3FB47 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		BC67BBA69445F2FD05237229 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		C6D0EB0C2A2AB7FDB70A6220 /* NetworkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkStore.swift; sourceTree = "<group>"; };
 		C6DBF882B2E0A414BDD2131B /* LogLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogLensApp.swift; sourceTree = "<group>"; };
+		CB17C892D44F1895DF959263 /* NetworkLogEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogEntry.swift; sourceTree = "<group>"; };
+		CC74831229161C6AB2EC0632 /* NetworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkView.swift; sourceTree = "<group>"; };
 		CD96E53C4F12C945077F47D8 /* LogSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogSource.swift; sourceTree = "<group>"; };
 		CF30397780A2B3CC800D475A /* KeyValueGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyValueGrid.swift; sourceTree = "<group>"; };
+		E318EDA43DCBB0F8BBAB8D70 /* JSONText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONText.swift; sourceTree = "<group>"; };
+		EFA9F9A760AC0D401E3A2447 /* SimulatorTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatorTrust.swift; sourceTree = "<group>"; };
 		F141422A9CF4AC4427732118 /* LogLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogLevel.swift; sourceTree = "<group>"; };
 		F48415E8BEB1B851D56ACE13 /* LogFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogFilter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		08BD300E580B0757DBB5616D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F2B7CBEFFE679D06C898BA90 /* NIOCore in Frameworks */,
+				D8C9B086AD4FD17BE8842358 /* NIOPosix in Frameworks */,
+				CEECC7C91B2813E198C2E3C8 /* NIOHTTP1 in Frameworks */,
+				8F8B47D384E598D6CC0CAD88 /* NIOSSL in Frameworks */,
+				D0F59F4E4DADAAE18DE6C9C1 /* X509 in Frameworks */,
+				81EE9D06E51B4E98D5DBA1FB /* Crypto in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		301479EB6D0D9A14AA554DE6 /* Capture */ = {
@@ -98,7 +150,9 @@
 			children = (
 				8FBDDAEB97E6AB6191A6F47D /* EventStore.swift */,
 				F48415E8BEB1B851D56ACE13 /* LogFilter.swift */,
+				C6D0EB0C2A2AB7FDB70A6220 /* NetworkStore.swift */,
 				A64355E8FED1FE84BEBA848D /* TimelineFeed.swift */,
+				189768DC01F0D7958EF72A34 /* TimelineLane.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -127,6 +181,7 @@
 				33E8DFE1F92549CD25BEF977 /* App */,
 				301479EB6D0D9A14AA554DE6 /* Capture */,
 				92B506E97217B7413CE028FC /* Models */,
+				D91A6D0584F49C16760CB285 /* Network */,
 				F21C216EC21F1977BD445339 /* Parsing */,
 				461820F2F86C930A5544176C /* Resources */,
 				34DC1F4047A953BF86C5D49A /* Store */,
@@ -167,6 +222,8 @@
 				2D8CB574EFF06165CADE768B /* EventSemantics.swift */,
 				41CDE3DF487BFD344E15F6B7 /* LogEntry.swift */,
 				F141422A9CF4AC4427732118 /* LogLevel.swift */,
+				CB17C892D44F1895DF959263 /* NetworkLogEntry.swift */,
+				B1021B9F7EEAE4EDD5AA7729 /* NetworkTransaction.swift */,
 				A4C273FF0A1A76B1E1CA418A /* ParsedMessage.swift */,
 			);
 			path = Models;
@@ -176,6 +233,7 @@
 			isa = PBXGroup;
 			children = (
 				480FA4A0D19C207C128A6F75 /* Badges.swift */,
+				E318EDA43DCBB0F8BBAB8D70 /* JSONText.swift */,
 				CF30397780A2B3CC800D475A /* KeyValueGrid.swift */,
 			);
 			path = Components;
@@ -199,6 +257,17 @@
 			path = Support;
 			sourceTree = "<group>";
 		};
+		B8FF3A79A2442A56CF43446A /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				B7F8A2BC70BCEEFAD7E64F6C /* NetworkBadges.swift */,
+				31DB864735E9CD5534C95E53 /* NetworkDetailView.swift */,
+				83FE97DFE512587A12D8C99E /* NetworkSidebar.swift */,
+				CC74831229161C6AB2EC0632 /* NetworkView.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
 		C0970882A015C59081DCE293 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -206,11 +275,25 @@
 				347244AD704CD242F00D8449 /* SettingsView.swift */,
 				951031C7CE46F32E4E6842BD /* Components */,
 				79CB9FE9ECF3795556C66F05 /* Detail */,
+				B8FF3A79A2442A56CF43446A /* Network */,
 				8EBEEC27424F3F249B37E6C8 /* Sidebar */,
 				549CE99438DBB3BEDE108528 /* Table */,
 				840AE3BD1B2BC3198FCCA083 /* Timeline */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		D91A6D0584F49C16760CB285 /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				B64BB89EB7D4191825C0CE6E /* BodyDecoder.swift */,
+				9D45410623C4FF5BFE0D21DB /* CertificateAuthority.swift */,
+				A3F469587B86BC5C8826CC26 /* ProcessLookup.swift */,
+				4D16A00E3FFFE9BF2FB68EE9 /* ProxyServer.swift */,
+				EFA9F9A760AC0D401E3A2447 /* SimulatorTrust.swift */,
+				1866FAD32749779896D1568F /* SystemProxy.swift */,
+			);
+			path = Network;
 			sourceTree = "<group>";
 		};
 		F21C216EC21F1977BD445339 /* Parsing */ = {
@@ -230,6 +313,7 @@
 			buildPhases = (
 				D17E23AC25CD3AC778612AD0 /* Sources */,
 				0B6BBFBEBCB50C6053C4225F /* Resources */,
+				08BD300E580B0757DBB5616D /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -237,6 +321,12 @@
 			);
 			name = LogLens;
 			packageProductDependencies = (
+				32B8C12CA861CC6FC51693BA /* NIOCore */,
+				59F6AC37C60F428ED7A89849 /* NIOPosix */,
+				3AFAC3DD428908198B154431 /* NIOHTTP1 */,
+				2277A5349F1D7F32FFD48EAF /* NIOSSL */,
+				21E6C94669CC4060B84BFAD5 /* X509 */,
+				74D43DD82933629D0E87C949 /* Crypto */,
 			);
 			productName = LogLens;
 			productReference = 4AD132E7D54D53D8E6B43D30 /* LogLens.app */;
@@ -266,6 +356,12 @@
 			);
 			mainGroup = 32B0743764F154AA95CF2F65;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				54EFD98FF044AB6570EEB40B /* XCRemoteSwiftPackageReference "swift-certificates" */,
+				92844DF14CFD458CFD3ACD4D /* XCRemoteSwiftPackageReference "swift-crypto" */,
+				50DBE17BD518A06B4FE64717 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				4B85BA1408FB98D6BE200C5B /* XCRemoteSwiftPackageReference "swift-nio-ssl" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AD43BB9A181530B57825980B /* Products */;
 			projectDirPath = "";
@@ -294,6 +390,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F493235F19B639F4E875BE98 /* Badges.swift in Sources */,
+				C2B013475C794A13CEBEC561 /* BodyDecoder.swift in Sources */,
+				4E66CB1F202BF0D51A7342C7 /* CertificateAuthority.swift in Sources */,
 				510B0C44DF165C8255CAAAC0 /* ContentView.swift in Sources */,
 				5DF9CBA8658103AE69857014 /* EventDetailView.swift in Sources */,
 				AEFD3F4693638184A0495D70 /* EventSemantics.swift in Sources */,
@@ -302,6 +400,7 @@
 				7657E8EC60D934F2565089CB /* EventTimelineView.swift in Sources */,
 				7C904E2C1ACA1818BCD6E9E6 /* ExportDocument.swift in Sources */,
 				1DED9ECD75535F9765A492F6 /* Formatters.swift in Sources */,
+				CB4BBFF2B180A143A4069083 /* JSONText.swift in Sources */,
 				0268422ABE5F57C4A9E31DB2 /* KeyValueGrid.swift in Sources */,
 				E059CBF858F02D4A6D5F3EF8 /* LogEntry.swift in Sources */,
 				362795D86D6520FC0753D892 /* LogFilter.swift in Sources */,
@@ -310,13 +409,25 @@
 				16BE660B28E6F405C196288E /* LogSource.swift in Sources */,
 				F6392B70381458C6E4C28D7E /* LogStreamer.swift in Sources */,
 				914BFBD25A371E05E71C602C /* MessageParser.swift in Sources */,
+				9AE57CDAEDBB9AAAA17DE586 /* NetworkBadges.swift in Sources */,
+				343A5B8ACD3FB988F6A707B5 /* NetworkDetailView.swift in Sources */,
+				9B199E100156925FBC624AF6 /* NetworkLogEntry.swift in Sources */,
+				BFF7F1E9162892E13551B506 /* NetworkSidebar.swift in Sources */,
+				3CA9B3A1CBB8962FF68FE162 /* NetworkStore.swift in Sources */,
+				B168DD79D29C256F92F5773A /* NetworkTransaction.swift in Sources */,
+				87E6D746F13C202F9569E777 /* NetworkView.swift in Sources */,
 				828CB51B9767A0072401795F /* ParsedMessage.swift in Sources */,
 				F1F10951C9EF0468F8978198 /* Pasteboard.swift in Sources */,
+				6BC091D9F88E662075960CE3 /* ProcessLookup.swift in Sources */,
+				521781176F95DB2AF32A5F86 /* ProxyServer.swift in Sources */,
 				5EA4D7F705BD030662D5E74A /* SettingsView.swift in Sources */,
 				FB5C52A6C4C422427C75EB8E /* SidebarView.swift in Sources */,
+				CE48BEB3E7DCE86AB83F4E9E /* SimulatorTrust.swift in Sources */,
 				E1E9BA5BC8CE1C5EC7A0E79E /* SourceDiscovery.swift in Sources */,
+				5CF2B41B445F2D2361A58E0E /* SystemProxy.swift in Sources */,
 				0018F24F2BE35560132A4A70 /* TimelineCard.swift in Sources */,
 				B66B6226FA55ED0F4CE5A6CB /* TimelineFeed.swift in Sources */,
+				DA956BBD8E15721835B849A9 /* TimelineLane.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -510,6 +621,74 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4B85BA1408FB98D6BE200C5B /* XCRemoteSwiftPackageReference "swift-nio-ssl" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-ssl.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.27.0;
+			};
+		};
+		50DBE17BD518A06B4FE64717 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.70.0;
+			};
+		};
+		54EFD98FF044AB6570EEB40B /* XCRemoteSwiftPackageReference "swift-certificates" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-certificates.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
+		92844DF14CFD458CFD3ACD4D /* XCRemoteSwiftPackageReference "swift-crypto" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-crypto.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		21E6C94669CC4060B84BFAD5 /* X509 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 54EFD98FF044AB6570EEB40B /* XCRemoteSwiftPackageReference "swift-certificates" */;
+			productName = X509;
+		};
+		2277A5349F1D7F32FFD48EAF /* NIOSSL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4B85BA1408FB98D6BE200C5B /* XCRemoteSwiftPackageReference "swift-nio-ssl" */;
+			productName = NIOSSL;
+		};
+		32B8C12CA861CC6FC51693BA /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 50DBE17BD518A06B4FE64717 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+		3AFAC3DD428908198B154431 /* NIOHTTP1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 50DBE17BD518A06B4FE64717 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOHTTP1;
+		};
+		59F6AC37C60F428ED7A89849 /* NIOPosix */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 50DBE17BD518A06B4FE64717 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOPosix;
+		};
+		74D43DD82933629D0E87C949 /* Crypto */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 92844DF14CFD458CFD3ACD4D /* XCRemoteSwiftPackageReference "swift-crypto" */;
+			productName = Crypto;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0D736C30671F773BC62B1D74 /* Project object */;
 }

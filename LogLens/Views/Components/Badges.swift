@@ -24,3 +24,34 @@ struct TagBadge: View {
             .background(color, in: Capsule())
     }
 }
+
+/// Success/failure tag for network cards: ✓ 200 (green), ✕ 404 (orange), ✕ 500 / FAILED (red), TUNNEL (gray).
+struct OutcomeBadge: View {
+    let card: NetworkCardData
+
+    private var color: Color {
+        if card.isTunnel { return .gray }
+        if card.failed && card.statusCode == nil { return .red }
+        switch card.statusCode ?? 0 {
+        case 0..<400: return .green
+        case 400..<500: return .orange
+        default: return .red
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if !card.isTunnel {
+                Image(systemName: card.isSuccess ? "checkmark" : "xmark")
+                    .font(.system(size: 8, weight: .heavy))
+            }
+            Text(card.outcomeText.uppercased())
+        }
+        .font(.caption2.weight(.heavy).monospacedDigit())
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(color, in: Capsule())
+        .help(card.statusReason.isEmpty ? card.outcomeText : "\(card.outcomeText) \(card.statusReason)")
+    }
+}

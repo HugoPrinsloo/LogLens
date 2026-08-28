@@ -3,10 +3,14 @@ import Observation
 import SwiftUI
 
 enum EventViewMode: String, CaseIterable, Identifiable {
-    case table, timeline
+    case table, timeline, network
     var id: String { rawValue }
-    var title: String { self == .table ? "List" : "Timeline" }
-    var symbol: String { self == .table ? "list.bullet" : "rectangle.stack" }
+    var title: String {
+        switch self { case .table: "List"; case .timeline: "Timeline"; case .network: "Network" }
+    }
+    var symbol: String {
+        switch self { case .table: "list.bullet"; case .timeline: "rectangle.stack"; case .network: "network" }
+    }
 }
 
 @MainActor
@@ -44,11 +48,23 @@ final class EventStore {
     var showInspector = true
 
     let timeline = TimelineFeed()
+    private(set) var lanes: [TimelineLane] = []
+    static let maxLanes = 4
+
     var viewMode: EventViewMode = .table {
         didSet {
             UserDefaults.standard.set(viewMode.rawValue, forKey: "viewMode")
-            timeline.setActive(viewMode == .timeline, seed: filtered)
+            timeline.setActive(viewMode == .timeline && lanes.isEmpty, seed: filtered)
+            for lane in lanes {
+                lane.feed.setActive(viewMode == .timeline, seed: entries.filter(lane.matcher))
+            }
         }
+    }
+    /// Timeline toolbar toggle: when on, clicking a card copies it as a PNG instead of expanding it. Not persisted.
+    var copyCardOnClick = false
+    /// Show proxied HTTP requests (from the Network tab) alongside log events in the table and timeline.
+    var showNetworkEvents = true {
+        didSet { UserDefaults.standard.set(showNetworkEvents, forKey: "showNetworkEvents"); refilter() }
     }
     var timelineExpandAll = false {
         didSet { UserDefaults.standard.set(timelineExpandAll, forKey: "timelineExpandAll") }
@@ -74,6 +90,9 @@ final class EventStore {
         if d.object(forKey: "maxEntries") != nil { maxEntries = max(1_000, d.integer(forKey: "maxEntries")) }
         if let raw = d.string(forKey: "viewMode"), let m = EventViewMode(rawValue: raw) { viewMode = m }
         timelineExpandAll = d.bool(forKey: "timelineExpandAll")
+        if d.object(forKey: "showNetworkEvents") != nil { showNetworkEvents = d.bool(forKey: "showNetworkEvents") }
+        // `LogLens --network` opens straight into the network inspector (and NetworkStore auto-starts the proxy).
+        if CommandLine.arguments.contains("--network") { viewMode = .network }
         // didSet doesn't fire during init.
         timeline.setActive(viewMode == .timeline, seed: [])
 
@@ -104,6 +123,8 @@ final class EventStore {
             }
             // `LogLens --record` starts capturing immediately (handy for scripting and dev).
             if selectBooted, !isCapturing, CommandLine.arguments.contains("--record") { startCapture() }
+            // `LogLens --split` opens the timeline pre-split into two lanes.
+            if selectBooted, CommandLine.arguments.contains("--split") { enableSplit() }
         }
     }
 
@@ -152,6 +173,11 @@ final class EventStore {
 
     // MARK: - Data mutation
 
+    /// Network proxy transactions join the same stream as log events (they carry `isNetwork`).
+    func appendNetwork(_ tx: NetworkTransaction) {
+        append([LogEntry.network(tx)])
+    }
+
     private func append(_ batch: [LogEntry]) {
         guard !batch.isEmpty else { return }
         totalReceived += batch.count
@@ -166,6 +192,7 @@ final class EventStore {
             filtered.append(contentsOf: matches)
             timeline.ingest(matches)
         }
+        for lane in lanes { lane.feed.ingest(batch.filter(lane.matcher)) }
         trimIfNeeded()
         updateRate(added: batch.count)
     }
@@ -210,6 +237,7 @@ final class EventStore {
         rateWindow.removeAll()
         eventsPerSecond = 0
         timeline.reset(seed: [])
+        for lane in lanes { lane.feed.reset(seed: []) }
     }
 
     // MARK: - Filtering
@@ -242,10 +270,87 @@ final class EventStore {
         switch facet { case .process: 0; case .subsystem: 1; case .category: 2 }
     }
 
+    /// The sidebar/search filter plus the "show network events" toggle.
+    private func makeMatcher(_ f: LogFilter) -> (LogEntry) -> Bool {
+        let base = f.makeMatcher(starred: starred)
+        let showNetwork = showNetworkEvents
+        return { e in (showNetwork || !e.isNetwork) && base(e) }
+    }
+
     private func refilter() {
-        matcher = filter.makeMatcher(starred: starred)
+        matcher = makeMatcher(filter)
         filtered = filter.isActive ? entries.filter(matcher) : entries
         timeline.reset(seed: filtered)
+        for lane in lanes {
+            lane.matcher = laneMatcher(lane)
+            lane.feed.reset(seed: entries.filter(lane.matcher))
+        }
+    }
+
+    // MARK: - Timeline lanes
+
+    /// Lanes keep the global search/level/star filter but swap in their own facets.
+    private func laneMatcher(_ lane: TimelineLane) -> (LogEntry) -> Bool {
+        var f = filter
+        f.facets = lane.facets
+        return makeMatcher(f)
+    }
+
+    /// Adds the facet to the lane at `index` (toggling it if already present),
+    /// or creates a new lane when `index` is past the end.
+    func assignFacet(_ facet: Facet, toLaneAt index: Int) {
+        if index >= lanes.count {
+            guard lanes.count < Self.maxLanes else { return }
+            let lane = TimelineLane()
+            lane.facets.insert(facet)
+            lane.matcher = laneMatcher(lane)
+            lanes.append(lane)
+            if lanes.count == 1 { timeline.setActive(false, seed: []) }
+        } else {
+            let lane = lanes[index]
+            if lane.facets.contains(facet) { lane.facets.remove(facet) } else { lane.facets.insert(facet) }
+            lane.matcher = laneMatcher(lane)
+        }
+        if viewMode != .timeline {
+            viewMode = .timeline   // didSet activates every lane feed
+        } else {
+            for lane in lanes {
+                lane.feed.setActive(true, seed: entries.filter(lane.matcher))
+            }
+        }
+    }
+
+    func removeLane(_ lane: TimelineLane) {
+        lane.feed.setActive(false, seed: [])
+        lanes.removeAll { $0.id == lane.id }
+        if lanes.isEmpty { timeline.setActive(viewMode == .timeline, seed: filtered) }
+    }
+
+    /// One-click split: lane 1 takes the current sidebar facet selection,
+    /// lane 2 starts with everything. Facets are then adjusted per lane via
+    /// the sidebar's "Timeline Lanes" context menu.
+    func enableSplit() {
+        guard lanes.isEmpty else { return }
+        let first = TimelineLane()
+        first.facets = filter.facets
+        first.matcher = laneMatcher(first)
+        let second = TimelineLane()
+        second.matcher = laneMatcher(second)
+        lanes = [first, second]
+        timeline.setActive(false, seed: [])
+        if viewMode != .timeline {
+            viewMode = .timeline   // didSet activates every lane feed
+        } else {
+            for lane in lanes {
+                lane.feed.setActive(true, seed: entries.filter(lane.matcher))
+            }
+        }
+    }
+
+    func disableSplit() {
+        for lane in lanes { lane.feed.setActive(false, seed: []) }
+        lanes = []
+        timeline.setActive(viewMode == .timeline, seed: filtered)
     }
 
     // MARK: - Starring

@@ -18,12 +18,34 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_HARDENED_RUNTIME: YES
     SWIFT_STRICT_CONCURRENCY: minimal
+packages:
+  swift-nio:
+    url: https://github.com/apple/swift-nio.git
+    from: "2.70.0"
+  swift-nio-ssl:
+    url: https://github.com/apple/swift-nio-ssl.git
+    from: "2.27.0"
+  swift-certificates:
+    url: https://github.com/apple/swift-certificates.git
+    from: "1.5.0"
+  swift-crypto:
+    url: https://github.com/apple/swift-crypto.git
+    from: "3.5.0"
 targets:
   LogLens:
     type: application
     platform: macOS
     sources:
       - path: LogLens
+    dependencies:
+      - package: swift-nio
+        products: [NIOCore, NIOPosix, NIOHTTP1]
+      - package: swift-nio-ssl
+        product: NIOSSL
+      - package: swift-certificates
+        product: X509
+      - package: swift-crypto
+        product: Crypto
     info:
       path: LogLens/Info.plist
       properties:

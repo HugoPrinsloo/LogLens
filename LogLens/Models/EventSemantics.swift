@@ -53,6 +53,8 @@ enum EventTypeStyle {
         "view": .orange, "viewed": .orange, "screen": .orange,
         "submit": .purple, "open": .teal, "close": .teal,
         "success": .mint, "failure": .red, "error": .red,
+        // HTTP methods (network proxy cards) — same palette as the Network tab.
+        "get": .blue, "post": .green, "put": .orange, "patch": .purple, "delete": .red, "head": .teal, "connect": .gray,
     ]
 
     private static let palette: [Color] = [.orange, .red, .purple, .teal, .yellow, .pink, .indigo, .mint]
@@ -72,6 +74,8 @@ enum EventTypeStyle {
         "submit": "paperplane.fill", "open": "arrow.up.right.square.fill", "close": "xmark.square.fill",
         "success": "checkmark.circle.fill", "failure": "exclamationmark.triangle.fill",
         "error": "exclamationmark.triangle.fill",
+        "get": "arrow.down.circle.fill", "post": "arrow.up.circle.fill", "put": "arrow.up.circle.fill",
+        "patch": "pencil.circle.fill", "delete": "trash.circle.fill", "head": "info.circle.fill", "connect": "lock.fill",
     ]
 
     static func symbol(for type: String) -> String {

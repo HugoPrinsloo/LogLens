@@ -102,6 +102,23 @@ private struct FacetSection: View {
                         Button(selected ? "Remove from filter" : "Add to filter") { store.toggleFacet(facet, exclusive: false) }
                         Button("Only this") { store.toggleFacet(facet, exclusive: true) }
                         Divider()
+                        Menu("Timeline Lanes") {
+                            ForEach(Array(store.lanes.enumerated()), id: \.element.id) { i, lane in
+                                Button {
+                                    store.assignFacet(facet, toLaneAt: i)
+                                } label: {
+                                    if lane.facets.contains(facet) {
+                                        Label("Lane \(i + 1): \(lane.title)", systemImage: "checkmark")
+                                    } else {
+                                        Text("Lane \(i + 1): \(lane.title)")
+                                    }
+                                }
+                            }
+                            if store.lanes.count < EventStore.maxLanes {
+                                Button("Show in New Lane") { store.assignFacet(facet, toLaneAt: store.lanes.count) }
+                            }
+                        }
+                        Divider()
                         Button("Copy “\(row.key)”") { Pasteboard.copy(row.key) }
                     }
             }
@@ -111,7 +128,7 @@ private struct FacetSection: View {
     }
 }
 
-private struct FacetRow: View {
+struct FacetRow: View {
     let name: String
     let count: Int
     let selected: Bool

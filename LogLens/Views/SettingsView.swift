@@ -2,9 +2,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(EventStore.self) private var store
+    @Environment(NetworkStore.self) private var network
 
     var body: some View {
         @Bindable var store = store
+        @Bindable var network = network
         Form {
             Section("Capture") {
                 Picker("Scope", selection: $store.scope) {
@@ -33,6 +35,24 @@ struct SettingsView: View {
                     Text("50,000 events").tag(50_000)
                     Text("100,000 events").tag(100_000)
                     Text("250,000 events").tag(250_000)
+                }
+            }
+
+            Section("Network Proxy") {
+                Picker("Decrypt TLS for", selection: $network.policy) {
+                    ForEach(DecryptPolicy.allCases) { Text($0.title).tag($0) }
+                }
+                Text("Simulator apps trust the LogLens certificate automatically. Decrypting Mac traffic needs the certificate trusted in your login keychain (Trust on This Mac…).")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextField("Proxy port", value: $network.port, format: .number.grouping(.never))
+                    .disabled(network.isCapturing)
+                HStack {
+                    Button("Reinstall Certificate in Simulators") { Task { await network.reinstallCertificate() } }
+                    Button("Trust on This Mac…") { Task { await network.trustOnThisMac() } }
+                }
+                .controlSize(.small)
+                if !network.caPath.isEmpty {
+                    Text(network.caPath).font(.caption.monospaced()).foregroundStyle(.tertiary).textSelection(.enabled)
                 }
             }
 

@@ -16,6 +16,10 @@ struct LogEntry: Identifiable, Hashable, Codable {
     let traceID: UInt64?
     let sourceName: String
     let parsed: ParsedMessage
+    /// True for HTTP transactions captured by the network proxy (see `LogEntry.network(_:)`).
+    var isNetwork: Bool = false
+    /// Rendering data for network cards (bodies, status); nil for log events.
+    var network: NetworkCardData? = nil
 
     static func == (lhs: LogEntry, rhs: LogEntry) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

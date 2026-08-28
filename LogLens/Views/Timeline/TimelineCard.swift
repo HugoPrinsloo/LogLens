@@ -29,7 +29,11 @@ struct TimelineCard: View {
     let item: TimelineFeed.TimelineItem
     let isExpanded: Bool
     let toggle: () -> Void
+    /// True when the card is being rendered off-screen for "Copy as Image" (no gestures, no feedback).
+    var isSnapshot = false
     @Environment(EventStore.self) private var store
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var showCopied = false
 
     private var entry: LogEntry { item.entry }
 
@@ -59,8 +63,73 @@ struct TimelineCard: View {
         .overlay(blobShape.stroke(.separator))
         .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
         .contentShape(blobShape)
-        .onTapGesture(perform: toggle)
+        .overlay(alignment: .topTrailing) {
+            if showCopied {
+                Label("Image copied", systemImage: "checkmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.accentColor, in: Capsule())
+                    .padding(10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+        }
+        // Click expands/collapses, or copies the card as a PNG when the toolbar "Copy as Image" toggle is on.
+        .onTapGesture { if store.copyCardOnClick { copyAsImage() } else { toggle() } }
         .contextMenu { menuItems }
+        .onAppear(perform: writeDevSnapshot)
+    }
+
+    /// `LogLens --snapshot-card <path>` writes the first card's "Copy as Image" PNG to disk (dev/verification aid).
+    private static let devSnapshotPath: String? = {
+        guard let i = CommandLine.arguments.firstIndex(of: "--snapshot-card"), i + 1 < CommandLine.arguments.count else { return nil }
+        return CommandLine.arguments[i + 1]
+    }()
+    private static var devSnapshotDone = false
+
+    private func writeDevSnapshot() {
+        // Prefers a network card with a body when the proxy is running, else the first structured analytics card.
+        let wanted = CommandLine.arguments.contains("--proxy") ? (entry.network?.responseBody != nil || entry.network?.requestBody != nil) : item.eventType != nil
+        guard let path = Self.devSnapshotPath, !Self.devSnapshotDone, !isSnapshot, wanted else { return }
+        Self.devSnapshotDone = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard let image = renderImage(), let tiff = image.tiffRepresentation,
+                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return }
+            try? png.write(to: URL(fileURLWithPath: path))
+        }
+    }
+
+    // MARK: - Copy as image
+
+    private func copyAsImage() {
+        guard !isSnapshot else { return }
+        if let image = renderImage() {
+            Pasteboard.copy(image: image)
+            withAnimation(.snappy(duration: 0.2)) { showCopied = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.easeOut(duration: 0.3)) { showCopied = false }
+            }
+        }
+    }
+
+    /// Renders this card, expanded, at the timeline's card width and 2× scale (transparent background).
+    @MainActor
+    private func renderImage() -> NSImage? {
+        let snapshot = TimelineCard(item: item, isExpanded: true, toggle: {}, isSnapshot: true)
+            .frame(width: TimelineRow.cardMaxWidth)
+            .padding(12)   // room for the shadow
+            .environment(store)
+            .environment(\.colorScheme, colorScheme)
+        let renderer = ImageRenderer(content: snapshot)
+        renderer.scale = 2
+        renderer.isOpaque = false
+        var image: NSImage?
+        // Dynamic NSColors (controlBackgroundColor…) resolve against the current drawing appearance.
+        NSApp.effectiveAppearance.performAsCurrentDrawingAppearance {
+            image = renderer.nsImage
+        }
+        return image
     }
 
     private var header: some View {
@@ -79,11 +148,36 @@ struct TimelineCard: View {
                 meta
             }
             Spacer(minLength: 8)
+            if let net = entry.network {
+                OutcomeBadge(card: net)
+            }
             if let type = item.eventType {
                 TagBadge(text: type, color: EventTypeStyle.color(for: type))
             } else {
                 LevelBadge(level: entry.level)
             }
+        }
+    }
+
+    /// Request / response bodies for network cards, each in a syntax-coloured code box.
+    @ViewBuilder
+    private func bodyBox(_ text: String, label: String, symbol: String, content: String, size: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Label(label, systemImage: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if !content.isEmpty { Text(content).font(.caption).foregroundStyle(.tertiary) }
+                Text(NetworkStyle.bytes(size)).font(.caption).foregroundStyle(.tertiary)
+                Spacer()
+                if !isSnapshot {
+                    Button { Pasteboard.copy(text) } label: { Image(systemName: "doc.on.doc") }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .help("Copy \(label.lowercased())")
+                }
+            }
+            JSONText(text: text, lineCap: isSnapshot ? 60 : 40)
         }
     }
 
@@ -162,15 +256,21 @@ struct TimelineCard: View {
             }
             if !entry.parsed.freeText.isEmpty && entry.parsed.isStructured {
                 ForEach(Array(entry.parsed.freeText.enumerated()), id: \.offset) { _, line in
-                    Text(line).font(.callout).textSelection(.enabled)
+                    selectable(Text(line).font(.callout))
+                }
+            }
+            if let net = entry.network {
+                if let body = net.requestBody {
+                    bodyBox(body, label: "Request", symbol: "arrow.up", content: net.requestContent, size: net.requestSize)
+                }
+                if let body = net.responseBody {
+                    bodyBox(body, label: "Response", symbol: "arrow.down", content: net.responseContent, size: net.responseSize)
                 }
             }
             // The parsed grid already carries everything for structured messages;
             // only show the raw body when parsing couldn't break it down.
             if !entry.parsed.isStructured {
-                Text(entry.message)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
+                selectable(Text(entry.message).font(.system(.caption, design: .monospaced)))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
                     .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
@@ -180,10 +280,23 @@ struct TimelineCard: View {
         .padding(.top, 4)
     }
 
+    /// Selectable text is backed by a different view that won't wrap under `ImageRenderer`; snapshots use plain text.
+    @ViewBuilder
+    private func selectable(_ text: Text) -> some View {
+        if isSnapshot {
+            text.fixedSize(horizontal: false, vertical: true)
+        } else {
+            text.textSelection(.enabled)
+        }
+    }
+
     @ViewBuilder
     private var menuItems: some View {
         Button(store.isStarred(entry.id) ? "Unstar" : "Star") { store.toggleStar(entry.id) }
         Divider()
+        Button(isExpanded ? "Collapse" : "Expand", action: toggle)
+        Divider()
+        Button("Copy as Image", action: copyAsImage)
         Button("Copy Message") { Pasteboard.copy(entry.message) }
         Button("Copy Title") { Pasteboard.copy(entry.parsed.title) }
         Button("Copy as JSON") { Pasteboard.copy(Pasteboard.json(for: entry)) }
