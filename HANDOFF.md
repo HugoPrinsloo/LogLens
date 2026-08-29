@@ -1,6 +1,6 @@
 # LogLens — Agent Handoff
 
-_Last updated: 2026-08-28 (late night). **v1.3.1 released** (commit `523b915`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.1): crash + perf fixes, see "1.3.0 post-release fixes". Tree clean. Earlier: v1.3.0 (commit `333df77`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.3.0): one recording (Record starts log stream + proxy; Network view mode removed), sidebar click-to-toggle facets + facet search, Heal in the Network toolbar menu, Check for Updates + update banner. Tree is clean. Release notes now live in `docs/releases/<version>.md` and `release.sh` uses that file when present (else GitHub generated notes)._
+_Last updated: 2026-08-29 (morning). **v1.4.0 released** (commit `d809681`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.4.0): the performance pass — see `docs/PERFORMANCE-AUDIT.md` (audit + what landed + before/after numbers) and the "Performance pass" entry under Open threads. Tree clean. Earlier: v1.3.1 (`523b915`, crash + perf fixes), v1.3.0 (`333df77`, one recording, sidebar toggles + facet search, Heal in the Network menu, Check for Updates). Release notes live in `docs/releases/<version>.md` and `release.sh` uses that file when present._
 
 ## What this app is
 
