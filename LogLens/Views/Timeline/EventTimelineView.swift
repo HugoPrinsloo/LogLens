@@ -8,10 +8,10 @@ struct EventTimelineView: View {
 
     var body: some View {
         Group {
-            if store.entries.isEmpty {
+            if !store.hasEntries {
                 EmptyStateView()
             } else if store.lanes.isEmpty {
-                if store.filtered.isEmpty {
+                if !store.hasFiltered {
                     ContentUnavailableView.search(text: store.filter.searchText)
                 } else {
                     TimelineScroll(feed: store.timeline, horizontalPadding: 24)
@@ -91,6 +91,7 @@ struct TimelineScroll: View {
                             item: item,
                             isFirst: item.id == feed.visible.first?.id,
                             isExpanded: store.timelineExpandAll != toggledIDs.contains(item.id),
+                            isStarred: store.starred.contains(item.id),
                             toggle: {
                                 withAnimation(.snappy(duration: 0.2)) {
                                     toggledIDs.toggleMembership(item.id)
@@ -107,7 +108,7 @@ struct TimelineScroll: View {
                         ))
                     }
                     if store.isCapturing {
-                        IncomingIndicator(pending: feed.pendingCount)
+                        IncomingIndicator(feed: feed)
                             .id(Self.incomingID)
                     }
                 }
@@ -125,10 +126,6 @@ struct TimelineScroll: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            // Track the last id, not the count: once `visible` hits its cap the
-            // count stops changing while events keep flowing.
-            // Same spring as TimelineFeed.revealNext, so the stack glides up in
-            // sync with the new card sliding in.
             .onChange(of: store.autoScroll) { _, on in
                 guard on, feed.visible.last != nil else { return }
                 scrollToNewest(proxy)
@@ -143,10 +140,12 @@ struct TimelineScroll: View {
 
 /// The tail of the connector line: a breathing pulse hinting that the next
 /// event will be born here, with a count when the feed is catching up.
+/// Reads the feed itself so `TimelineScroll.body` doesn't depend on the backlog counter.
 private struct IncomingIndicator: View {
-    let pending: Int
+    let feed: TimelineFeed
 
     var body: some View {
+        let pending = feed.pendingCount
         VStack(spacing: 6) {
             Rectangle()
                 .fill(LinearGradient(colors: [Color.secondary.opacity(0.35), .clear],

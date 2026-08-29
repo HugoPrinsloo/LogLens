@@ -5,8 +5,8 @@ struct ContentView: View {
     @Environment(NetworkStore.self) private var network
     @Environment(UpdateChecker.self) private var updates
     @State private var searchText = ""
-    @State private var isExporting = false
-    @State private var exportFiltered = true
+    @State private var searchDebounce: Task<Void, Never>?
+    @State private var exportDocument: ExportDocument?
 
     var body: some View {
         @Bindable var store = store
@@ -43,17 +43,24 @@ struct ContentView: View {
         .navigationTitle("LogLens")
         .navigationSubtitle(subtitle)
         .searchable(text: $searchText, placement: .toolbar, prompt: "Filter events")
-        .onChange(of: searchText) { _, new in store.updateFilter { $0.searchText = new } }
-        .toolbar { CaptureToolbar(isExporting: $isExporting, exportFiltered: $exportFiltered) }
+        // Debounced: a keystroke applies ~120 ms after typing pauses, so fast typing runs one filter pass, not six.
+        .onChange(of: searchText) { _, new in
+            searchDebounce?.cancel()
+            searchDebounce = Task {
+                try? await Task.sleep(for: .milliseconds(120))
+                guard !Task.isCancelled else { return }
+                store.updateFilter { $0.searchText = new }
+            }
+        }
+        .toolbar { CaptureToolbar(exportDocument: $exportDocument) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in store.stopCapture() }
         .alert(item: Binding(get: { updates.manualResult }, set: { updates.manualResult = $0 })) { result in
             Alert(title: Text(result.title), message: Text(result.message))
         }
-        // Only build the document while the panel is up: encoding every entry on each body evaluation
-        // was re-serialising the whole buffer on every incoming batch.
+        // The document is encoded off the main actor when the menu item is chosen; the panel opens once it's ready.
         .fileExporter(
-            isPresented: $isExporting,
-            document: isExporting ? ExportDocument(data: store.exportData(onlyFiltered: exportFiltered)) : nil,
+            isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
+            document: exportDocument,
             contentType: .json,
             defaultFilename: "LogLens-\(Formatters.fullMillis.string(from: Date()).prefix(19).replacingOccurrences(of: ":", with: "-"))"
         ) { _ in }
@@ -85,8 +92,7 @@ private struct InspectorContent: View {
 struct CaptureToolbar: ToolbarContent {
     @Environment(EventStore.self) private var store
     @Environment(NetworkStore.self) private var network
-    @Binding var isExporting: Bool
-    @Binding var exportFiltered: Bool
+    @Binding var exportDocument: ExportDocument?
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
@@ -106,7 +112,7 @@ struct CaptureToolbar: ToolbarContent {
 
             Button { store.clear() } label: { Label("Clear", systemImage: "trash") }
                 .help("Clear all events (⌘K)")
-                .disabled(store.entries.isEmpty)
+                .disabled(!store.hasEntries)
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
@@ -145,12 +151,12 @@ struct CaptureToolbar: ToolbarContent {
             .help("Follow newest events (⇧⌘T)")
 
             Menu {
-                Button("Export Filtered Events…") { exportFiltered = true; isExporting = true }
-                Button("Export All Events…") { exportFiltered = false; isExporting = true }
+                Button("Export Filtered Events…") { export(onlyFiltered: true) }
+                Button("Export All Events…") { export(onlyFiltered: false) }
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
-            .disabled(store.entries.isEmpty)
+            .disabled(!store.hasEntries)
 
             Button {
                 store.showInspector.toggle()
@@ -159,6 +165,13 @@ struct CaptureToolbar: ToolbarContent {
             }
             .help("Toggle inspector (⌥⌘I)")
             .disabled(store.viewMode == .timeline)
+        }
+    }
+
+    private func export(onlyFiltered: Bool) {
+        Task {
+            let data = await store.exportData(onlyFiltered: onlyFiltered)
+            exportDocument = ExportDocument(data: data)
         }
     }
 

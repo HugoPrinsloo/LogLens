@@ -2,11 +2,11 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Paces incoming entries into the timeline at a readable cadence.
+/// Feeds incoming entries into the timeline.
 ///
-/// `EventStore` feeds it explicitly (`ingest`/`reset`); it releases entries into
-/// `visible` one spring animation at a time, tightening the interval as backlog
-/// grows and skipping ahead when the stream outruns what a human can watch.
+/// `EventStore` feeds it explicitly (`ingest`/`reset`). Everything queued is revealed together as one spring
+/// (one animation per incoming batch, coalesced to ~10 reveals/s), so events appear as soon as they arrive and
+/// nothing is ever dropped — only cards that would already be past the visible cap are skipped.
 @MainActor
 @Observable
 final class TimelineFeed {
@@ -19,8 +19,8 @@ final class TimelineFeed {
 
         init(_ entry: LogEntry) {
             self.entry = entry
-            self.eventType = entry.parsed.derivedEventType
-            self.eid = entry.parsed.derivedEID
+            self.eventType = entry.parsed.eventType
+            self.eid = entry.parsed.eid
         }
 
         static func == (l: Self, r: Self) -> Bool { l.entry.id == r.entry.id }
@@ -28,15 +28,21 @@ final class TimelineFeed {
 
     /// Oldest → newest; newest renders at the bottom of the stack.
     private(set) var visible: [TimelineItem] = []
-    /// Queued but not yet revealed.
+    /// Queued but not yet revealed (only non-zero for the few ms between a batch landing and its reveal).
     private(set) var backlog = 0
-    /// Dropped by skip-ahead since the feed last caught up.
+    /// Skipped because more than `maxVisible` arrived in one go; reset once the feed is idle.
     private(set) var skipped = 0
 
     var pendingCount: Int { backlog + skipped }
 
-    static let maxVisible = 200
-    static let maxQueue = 60
+    nonisolated static let maxVisible = 200
+    /// Trim the head in chunks so the stack isn't re-laid-out on every reveal once it's full.
+    static let trimSlack = 20
+    /// Minimum spacing between reveals; batches that land inside the window merge into the next spring.
+    static let revealInterval: Duration = .milliseconds(100)
+    /// Groups larger than this land without the spring: nobody can follow 20 cards sliding in at once, and the
+    /// animation would keep the whole stack re-laying-out for 350 ms per reveal under a flood.
+    static let maxAnimatedGroup = 10
 
     private var queue: [LogEntry] = []
     private var drainTask: Task<Void, Never>?
@@ -47,8 +53,8 @@ final class TimelineFeed {
         drainTask?.cancel()
         drainTask = nil
         queue.removeAll()
-        backlog = 0
-        skipped = 0
+        setBacklog(0)
+        if skipped != 0 { skipped = 0 }
         visible = on ? seed.suffix(Self.maxVisible).map(TimelineItem.init) : []
     }
 
@@ -61,12 +67,13 @@ final class TimelineFeed {
     func ingest(_ batch: [LogEntry]) {
         guard active, !batch.isEmpty else { return }
         queue.append(contentsOf: batch)
-        if queue.count > Self.maxQueue {
-            skipped += queue.count - Self.maxQueue
-            queue.removeFirst(queue.count - Self.maxQueue)
-        }
-        backlog = queue.count
+        setBacklog(queue.count)
         startDrainIfNeeded()
+    }
+
+    private func setBacklog(_ n: Int) {
+        // Observation fires on every assignment; only assign when the value changes.
+        if backlog != n { backlog = n }
     }
 
     private func startDrainIfNeeded() {
@@ -74,32 +81,38 @@ final class TimelineFeed {
         drainTask = Task { [weak self] in
             defer { self?.drainTask = nil }
             while let self, self.active, !self.queue.isEmpty, !Task.isCancelled {
-                self.revealNext()
-                try? await Task.sleep(for: self.interval)
+                self.revealAll()
+                try? await Task.sleep(for: Self.revealInterval)
             }
-            if let self, self.queue.isEmpty { self.skipped = 0 }
+            if let self, self.queue.isEmpty, self.skipped != 0 { self.skipped = 0 }
         }
     }
 
-    /// Readable when calm, faster as backlog grows: 350 ms → 80 ms.
-    private var interval: Duration {
-        .milliseconds(max(80, 350 - backlog * 6))
-    }
-
-    private func revealNext() {
-        // Under heavy backlog reveal small groups so one animation covers several cards.
-        let n = backlog > 30 ? 3 : 1
-        let items = queue.prefix(n).map(TimelineItem.init)
-        queue.removeFirst(min(n, queue.count))
-        backlog = queue.count
-        withAnimation(.spring(duration: 0.35, bounce: 0.15)) {
-            visible.append(contentsOf: items)
-        }
-        if visible.count > Self.maxVisible {
-            // Trimmed rows are far off-screen; animating their removal would jank the stack.
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) { visible.removeFirst(visible.count - Self.maxVisible) }
+    private func revealAll() {
+        Perf.measure("timeline.reveal") {
+            if queue.count > Self.maxVisible {
+                // Cards beyond the visible cap would be trimmed straight away; don't build views for them.
+                skipped += queue.count - Self.maxVisible
+                queue.removeFirst(queue.count - Self.maxVisible)
+            }
+            let items = queue.map(TimelineItem.init)
+            queue.removeAll(keepingCapacity: true)
+            setBacklog(0)
+            if items.count <= Self.maxAnimatedGroup {
+                withAnimation(.spring(duration: 0.35, bounce: 0.15)) {
+                    visible.append(contentsOf: items)
+                }
+            } else {
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { visible.append(contentsOf: items) }
+            }
+            if visible.count > Self.maxVisible + Self.trimSlack {
+                // Trimmed rows are far off-screen; animating their removal would jank the stack.
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { visible.removeFirst(visible.count - Self.maxVisible) }
+            }
         }
     }
 }

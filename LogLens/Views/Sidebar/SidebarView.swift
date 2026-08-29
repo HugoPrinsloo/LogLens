@@ -15,9 +15,9 @@ struct SidebarView: View {
                     .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 6, trailing: 0))
             }
 
-            FacetSection(title: "Apps", symbol: "app.badge", counts: store.processCounts, query: query, make: Facet.process)
-            FacetSection(title: "Subsystems", symbol: "shippingbox", counts: store.subsystemCounts, query: query, make: Facet.subsystem)
-            FacetSection(title: "Categories", symbol: "tag", counts: store.categoryCounts, query: query, make: Facet.category)
+            FacetSection(title: "Apps", symbol: "app.badge", counts: store.facets.processes, query: query, make: Facet.process)
+            FacetSection(title: "Subsystems", symbol: "shippingbox", counts: store.facets.subsystems, query: query, make: Facet.subsystem)
+            FacetSection(title: "Categories", symbol: "tag", counts: store.facets.categories, query: query, make: Facet.category)
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
@@ -115,23 +115,24 @@ private struct FacetSection: View {
     @Environment(EventStore.self) private var store
     let title: String
     let symbol: String
-    let counts: [String: Int]
+    /// Pre-sorted by the store (published at most a few times a second).
+    let counts: [FacetSnapshot.Count]
     let query: String
     let make: (String) -> Facet
 
-    private var rows: [(key: String, count: Int)] {
+    private var rows: [FacetSnapshot.Count] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        return counts
-            .filter { q.isEmpty || $0.key.localizedCaseInsensitiveContains(q) }
-            .map { (key: $0.key, count: $0.value) }
-            .sorted {
-                if $0.count != $1.count { return $0.count > $1.count }
-                return $0.key < $1.key
-            }
+        guard !q.isEmpty else { return counts }
+        return counts.filter { $0.key.localizedCaseInsensitiveContains(q) }
     }
 
     private var selectedCount: Int {
-        counts.keys.filter { store.filter.facets.contains(make($0)) }.count
+        store.filter.facets.count { facet in
+            if case .process = facet, case .process = make("") { return true }
+            if case .subsystem = facet, case .subsystem = make("") { return true }
+            if case .category = facet, case .category = make("") { return true }
+            return false
+        }
     }
 
     var body: some View {
@@ -139,7 +140,7 @@ private struct FacetSection: View {
             if rows.isEmpty {
                 Text(counts.isEmpty ? "No events yet" : "No matches").font(.caption).foregroundStyle(.tertiary)
             }
-            ForEach(rows, id: \.key) { row in
+            ForEach(rows) { row in
                 let facet = make(row.key)
                 let selected = store.filter.facets.contains(facet)
                 FacetRow(name: row.key.isEmpty ? "(none)" : row.key, count: row.count, selected: selected, dimmed: row.key.isEmpty)

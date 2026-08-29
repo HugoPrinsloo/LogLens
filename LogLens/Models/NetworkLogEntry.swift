@@ -52,7 +52,7 @@ extension LogEntry {
         if let error = tx.error { fields.append(.init(id: 9, key: "Error", value: error)) }
         if let note = tx.note { fields.append(.init(id: 10, key: "Note", value: note)) }
 
-        // Decoded, pretty-printed bodies for the card's body boxes (and for search via `message`).
+        // Decoded, pretty-printed bodies for the card's body boxes, the inspector fallback, and search (`searchKey`).
         func bodyText(_ data: Data, encoding: String?, contentType: String) -> String? {
             guard !data.isEmpty else { return nil }
             let decoded = BodyDecoder.decode(data, contentEncoding: encoding).data
@@ -72,10 +72,6 @@ extension LogEntry {
             requestSize: tx.requestBodySize,
             responseSize: tx.responseBodySize
         )
-        var freeText: [String] = []
-        if let r = card.requestBody { freeText.append("↑ Request body"); freeText.append(r) }
-        if let r = card.responseBody { freeText.append("↓ Response body"); freeText.append(r) }
-
         let title = tx.isTunnel ? "CONNECT \(tx.host)" : "\(tx.method) \(tx.host)\(tx.pathOnly)"
         let summary = tx.isTunnel ? (tx.note ?? "TLS tunnel") : "\(status) · \(NetworkStyle.duration(tx.duration)) · ↓ \(NetworkStyle.bytes(tx.responseBodySize))"
         let level: LogLevel
@@ -83,18 +79,20 @@ extension LogEntry {
         else if (tx.statusCode ?? 0) >= 400 { level = .notice }
         else { level = .info }
 
-        return LogEntry(
+        let process = tx.clientProcess.isEmpty ? "?" : tx.clientProcess
+        var entry = LogEntry(
             id: networkIDBase + tx.id,
             timestamp: tx.startedAt,
             level: level,
-            process: tx.clientProcess.isEmpty ? "?" : tx.clientProcess,
+            process: process,
             processPath: "",
             processID: Int(tx.clientPID),
             threadID: 0,
             sender: "LogLens Proxy",
             subsystem: networkSubsystem,
             category: tx.host,
-            message: ([title + " → " + summary] + freeText).joined(separator: "\n"),
+            // Bodies live on the card (and in `searchKey`), not duplicated here.
+            message: title + " → " + summary,
             activityID: nil,
             traceID: nil,
             sourceName: "Proxy",
@@ -103,5 +101,11 @@ extension LogEntry {
             isNetwork: true,
             network: card
         )
+        entry.searchKey = LogEntry.makeSearchKey(
+            title: title, message: entry.message, process: process, subsystem: networkSubsystem, category: tx.host,
+            extra: [card.requestBody ?? "", card.responseBody ?? ""]
+        )
+        entry.timeText = Formatters.time.string(from: tx.startedAt)
+        return entry
     }
 }

@@ -33,8 +33,11 @@ final class ProxyServer {
 
     let ca: CertificateAuthority
     var policy: DecryptPolicy
-    /// Delivered on the main queue.
-    var onEvent: ((ProxyEvent) -> Void)?
+    /// Delivered on the main queue. For transactions that are no longer pending the matching timeline/table
+    /// `LogEntry` is built first, on `entryQueue` (body inflate + pretty-print), so the main thread never does it.
+    var onEvent: ((ProxyEvent, LogEntry?) -> Void)?
+    /// Serial so events reach the main queue in emission order.
+    private let entryQueue = DispatchQueue(label: "loglens.proxy.entries", qos: .userInitiated)
 
     private(set) var port: Int = 0
     private var group: MultiThreadedEventLoopGroup?
@@ -139,7 +142,14 @@ final class ProxyServer {
     }
 
     func emit(_ event: ProxyEvent) {
-        DispatchQueue.main.async { [onEvent] in onEvent?(event) }
+        let tx: NetworkTransaction
+        switch event {
+        case .began(let t), .updated(let t): tx = t
+        }
+        entryQueue.async { [onEvent] in
+            let entry = tx.state == .pending ? nil : Perf.measure("proxy.entry") { LogEntry.network(tx) }
+            DispatchQueue.main.async { onEvent?(event, entry) }
+        }
     }
 }
 
@@ -182,8 +192,23 @@ final class ProxyHTTPHandler: ChannelInboundHandler, RemovableChannelHandler {
         var requestDone = false
         var responseHeadSent = false
         var closeClientAfter = false
+        /// Binary bodies (images, video, fonts, octet-stream) are only kept up to a small sniffable prefix.
+        var storeRequestBody = true
+        var storeResponseBody = true
         init(tx: NetworkTransaction) { self.tx = tx }
     }
+
+    /// Keep full bodies only for content we can show as text; a session of image/video traffic through the
+    /// proxy otherwise pins hundreds of MB.
+    static func shouldStoreBody(contentType: String?) -> Bool {
+        guard let ct = contentType?.lowercased(), !ct.isEmpty else { return true }
+        // Same positive list as `BodyDecoder.isProbablyText` (so image/svg+xml is kept as text, for example).
+        if ct.hasPrefix("text/") || ct.contains("json") || ct.contains("xml") || ct.contains("javascript") || ct.contains("x-www-form-urlencoded") || ct.contains("html") { return true }
+        for prefix in ["image/", "video/", "audio/", "font/"] where ct.hasPrefix(prefix) { return false }
+        for needle in ["octet-stream", "zip", "protobuf", "pdf", "x-font", "woff"] where ct.contains(needle) { return false }
+        return true
+    }
+    static let binaryBodyPrefix = 512
 
     init(server: ProxyServer, mode: Mode, owner: ProcessLookup.Owner?) {
         self.server = server
@@ -248,8 +273,9 @@ final class ProxyHTTPHandler: ChannelInboundHandler, RemovableChannelHandler {
         case .body(let buf):
             guard let exchange else { return }
             exchange.tx.requestBodySize += buf.readableBytes
-            if exchange.tx.requestBody.count < ProxyServer.maxStoredBody {
-                exchange.tx.requestBody.append(contentsOf: buf.readableBytesView.prefix(ProxyServer.maxStoredBody - exchange.tx.requestBody.count))
+            let cap = exchange.storeRequestBody ? ProxyServer.maxStoredBody : Self.binaryBodyPrefix
+            if exchange.tx.requestBody.count < cap {
+                exchange.tx.requestBody.append(contentsOf: buf.readableBytesView.prefix(cap - exchange.tx.requestBody.count))
             }
             if exchange.tx.requestBody.count < exchange.tx.requestBodySize { exchange.tx.requestBodyTruncated = true }
             send(.body(.byteBuffer(buf)))
@@ -307,6 +333,7 @@ final class ProxyHTTPHandler: ChannelInboundHandler, RemovableChannelHandler {
 
         let ex = Exchange(tx: tx)
         ex.closeClientAfter = !head.isKeepAlive
+        ex.storeRequestBody = Self.shouldStoreBody(contentType: headers.first(name: "Content-Type"))
         exchange = ex
         if shouldRecord { server.emit(.began(tx)) }
 
@@ -391,6 +418,7 @@ final class ProxyHTTPHandler: ChannelInboundHandler, RemovableChannelHandler {
             exchange.tx.statusCode = Int(head.status.code)
             exchange.tx.statusReason = head.status.reasonPhrase
             exchange.tx.responseHeaders = head.headers.map { .init(name: $0.name, value: $0.value) }
+            exchange.storeResponseBody = Self.shouldStoreBody(contentType: head.headers.first(name: "Content-Type"))
             if !head.isKeepAlive { upstream?.closeAfterResponse = true }
             var out = HTTPResponseHead(version: head.version, status: head.status, headers: head.headers)
             out.headers.remove(name: "Proxy-Connection")
@@ -399,8 +427,9 @@ final class ProxyHTTPHandler: ChannelInboundHandler, RemovableChannelHandler {
             if shouldRecord { server.emit(.updated(exchange.tx)) }
         case .body(let buf):
             exchange.tx.responseBodySize += buf.readableBytes
-            if exchange.tx.responseBody.count < ProxyServer.maxStoredBody {
-                exchange.tx.responseBody.append(contentsOf: buf.readableBytesView.prefix(ProxyServer.maxStoredBody - exchange.tx.responseBody.count))
+            let cap = exchange.storeResponseBody ? ProxyServer.maxStoredBody : Self.binaryBodyPrefix
+            if exchange.tx.responseBody.count < cap {
+                exchange.tx.responseBody.append(contentsOf: buf.readableBytesView.prefix(cap - exchange.tx.responseBody.count))
             }
             if exchange.tx.responseBody.count < exchange.tx.responseBodySize { exchange.tx.responseBodyTruncated = true }
             context.writeAndFlush(wrapOutboundOut(.body(.byteBuffer(buf))), promise: nil)

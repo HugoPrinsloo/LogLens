@@ -12,7 +12,7 @@ struct LogLensApp: App {
         // One recording: Record starts the log stream and the proxy together, and finished HTTP
         // transactions become entries in the same table/timeline.
         store.network = network
-        network.onFinished = { [weak store] tx in store?.appendNetwork(tx) }
+        network.onFinished = { [weak store] entry in store?.appendNetwork(entry) }
         _store = State(initialValue: store)
         _network = State(initialValue: network)
     }

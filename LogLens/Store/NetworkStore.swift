@@ -47,8 +47,13 @@ final class NetworkStore {
         didSet { UserDefaults.standard.set(port, forKey: "networkProxyPort") }
     }
 
-    /// Fired on the main actor once a transaction has finished (completed, failed, or a closed tunnel).
-    var onFinished: ((NetworkTransaction) -> Void)?
+    /// Fired on the main actor once a transaction has finished (completed, failed, or a closed tunnel), with the
+    /// table/timeline entry the proxy already built for it off the main thread.
+    var onFinished: ((LogEntry) -> Void)?
+    /// Stored request+response body bytes across `transactions`; oldest bodies are dropped past `bodyBudget`.
+    private var bodyBytes = 0
+    private var bodyEvictionCursor = 0
+    static let bodyBudget = 256 * 1024 * 1024
 
     private var ca: CertificateAuthority?
     private var proxy: ProxyServer?
@@ -99,9 +104,9 @@ final class NetworkStore {
 
             let proxy = ProxyServer(ca: ca, policy: policy)
             // Events from a proxy that has since been stopped/replaced are dropped.
-            proxy.onEvent = { [weak self, weak proxy] event in
+            proxy.onEvent = { [weak self, weak proxy] event, entry in
                 guard let self, let proxy, proxy === self.proxy else { return }
-                handle(event)
+                handle(event, entry: entry)
             }
             proxy.setBypassHosts(bypassHosts)
             proxy.onBypassLearned = { [weak self] host in self?.bypassHosts.insert(host) }
@@ -181,6 +186,8 @@ final class NetworkStore {
     func clear() {
         transactions.removeAll(keepingCapacity: true)
         indexByID.removeAll()
+        bodyBytes = 0
+        bodyEvictionCursor = 0
     }
 
     func dismissError() { error = nil }
@@ -244,22 +251,28 @@ final class NetworkStore {
 
     // MARK: - Events
 
-    private func handle(_ event: ProxyEvent) {
+    private func handle(_ event: ProxyEvent, entry: LogEntry?) {
         switch event {
         case .began(let tx):
-            if tx.state != .pending { onFinished?(tx) }   // e.g. a rejected handshake reported as a failed CONNECT
+            if let entry, tx.state != .pending { onFinished?(entry) }   // e.g. a rejected handshake reported as a failed CONNECT
             if transactions.count >= Self.maxTransactions {
-                let drop = transactions.count - Self.maxTransactions + 1
+                // Hysteresis: one shift per ~10 % of the buffer instead of one per event once it's full.
+                let drop = transactions.count - Self.maxTransactions + Self.maxTransactions / 10
+                for t in transactions.prefix(drop) { bodyBytes -= t.requestBody.count + t.responseBody.count }
                 transactions.removeFirst(drop)
+                bodyEvictionCursor = max(0, bodyEvictionCursor - drop)
                 rebuildIndex()
             }
             indexByID[tx.id] = transactions.count
             transactions.append(tx)
+            bodyBytes += tx.requestBody.count + tx.responseBody.count
         case .updated(let tx):
             guard let i = indexByID[tx.id] else { return }
-            if tx.state != .pending && transactions[i].state == .pending { onFinished?(tx) }
+            if let entry, tx.state != .pending, transactions[i].state == .pending { onFinished?(entry) }
+            bodyBytes += (tx.requestBody.count + tx.responseBody.count) - (transactions[i].requestBody.count + transactions[i].responseBody.count)
             transactions[i] = tx
         }
+        enforceBodyBudget()
         if let dumpHandle, case .updated(let tx) = event, tx.state != .pending {
             let enc = JSONEncoder()
             enc.dateEncodingStrategy = .iso8601
@@ -267,6 +280,24 @@ final class NetworkStore {
                 dumpHandle.write(data)
                 dumpHandle.write(Data([0x0A]))
             }
+        }
+    }
+
+    /// Drops the oldest stored bodies (metadata stays) until the total is back under budget.
+    private func enforceBodyBudget() {
+        guard bodyBytes > Self.bodyBudget else { return }
+        // Transactions skipped while pending get another look once the cursor has been through the list.
+        if bodyEvictionCursor >= transactions.count { bodyEvictionCursor = 0 }
+        while bodyBytes > Self.bodyBudget, bodyEvictionCursor < transactions.count {
+            let i = bodyEvictionCursor
+            bodyEvictionCursor += 1
+            let size = transactions[i].requestBody.count + transactions[i].responseBody.count
+            guard size > 0, transactions[i].state != .pending else { continue }
+            transactions[i].requestBody = Data()
+            transactions[i].responseBody = Data()
+            transactions[i].requestBodyTruncated = transactions[i].requestBodySize > 0
+            transactions[i].responseBodyTruncated = transactions[i].responseBodySize > 0
+            bodyBytes -= size
         }
     }
 

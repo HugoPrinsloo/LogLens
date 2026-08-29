@@ -44,6 +44,21 @@ private struct EntryDetail: View {
                     }
                 }
 
+                // Network rows whose transaction the proxy no longer holds (10 k cap / body budget) still carry
+                // their decoded bodies on the entry.
+                if let net = entry.network {
+                    if let body = net.requestBody {
+                        DetailSection(title: "Request body", symbol: "arrow.up", trailing: "\(net.requestContent) \(NetworkStyle.bytes(net.requestSize))") {
+                            JSONText(text: body, lineCap: 80)
+                        }
+                    }
+                    if let body = net.responseBody {
+                        DetailSection(title: "Response body", symbol: "arrow.down", trailing: "\(net.responseContent) \(NetworkStyle.bytes(net.responseSize))") {
+                            JSONText(text: body, lineCap: 80)
+                        }
+                    }
+                }
+
                 DetailSection(title: "Message", symbol: "doc.plaintext", trailing: "\(entry.message.count) chars", collapsible: true, expanded: $showRaw) {
                     Text(entry.message)
                         .font(.system(.callout, design: .monospaced))

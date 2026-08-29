@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import SwiftUI
@@ -13,19 +14,51 @@ enum EventViewMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Sorted facet lists for the sidebar, published at most a few times a second (see `EventStore.facets`).
+struct FacetSnapshot: Equatable {
+    struct Count: Hashable, Identifiable {
+        let key: String
+        let count: Int
+        var id: String { key }
+    }
+    var processes: [Count] = []
+    var subsystems: [Count] = []
+    var categories: [Count] = []
+}
+
 @MainActor
 @Observable
 final class EventStore {
 
     // MARK: Data
-    private(set) var entries: [LogEntry] = []
-    private(set) var filtered: [LogEntry] = []
-    private(set) var processCounts: [String: Int] = [:]
-    private(set) var subsystemCounts: [String: Int] = [:]
-    private(set) var categoryCounts: [String: Int] = [:]
+    private(set) var entries: [LogEntry] = [] {
+        didSet { let e = !entries.isEmpty; if hasEntries != e { hasEntries = e } }
+    }
+    private(set) var filtered: [LogEntry] = [] {
+        didSet { let f = !filtered.isEmpty; if hasFiltered != f { hasFiltered = f } }
+    }
+    /// Bumped whenever `filtered` is replaced or trimmed (anything other than appending at the end), so the table
+    /// can tell "rows were appended" from "reload everything" without diffing.
+    private(set) var filteredRevision = 0
+    /// `entries`/`filtered` change on every batch; these only change when they flip, so views that just need to
+    /// know "is there anything?" don't re-render 10×/s.
+    private(set) var hasEntries = false
+    private(set) var hasFiltered = false
+    /// The filter that produced the current `filtered` (nil until the first pass lands). Narrowing while typing is
+    /// only valid when `filtered` really reflects the previous filter, not an older one whose pass was still in flight.
+    @ObservationIgnored private var appliedFilter: (filter: LogFilter, showNetwork: Bool)?
     private(set) var starred: Set<Int> = []
     private(set) var totalReceived = 0
     private(set) var eventsPerSecond = 0
+
+    /// Live counts (mutated on every batch, not observed by the UI).
+    @ObservationIgnored private var processCounts: [String: Int] = [:]
+    @ObservationIgnored private var subsystemCounts: [String: Int] = [:]
+    @ObservationIgnored private var categoryCounts: [String: Int] = [:]
+    /// What the sidebar renders: re-sorted and published at ≤ 4 Hz, and only when something changed.
+    private(set) var facets = FacetSnapshot()
+    @ObservationIgnored private var facetsDirty = false
+    @ObservationIgnored private var facetPublishScheduled = false
 
     // MARK: Filter
     private(set) var filter = LogFilter()
@@ -45,8 +78,14 @@ final class EventStore {
 
     // MARK: UI
     var selection: LogEntry.ID? {
-        didSet { if selection != nil { showInspector = true } }
+        didSet {
+            guard selection != oldValue else { return }
+            selectedEntry = selection.flatMap(entry(id:))
+            if selection != nil { showInspector = true }
+        }
     }
+    /// Resolved once per selection change (it used to be a computed scan of `filtered` on every batch).
+    private(set) var selectedEntry: LogEntry?
     var autoScroll = true
     var showInspector = true
 
@@ -59,7 +98,7 @@ final class EventStore {
             UserDefaults.standard.set(viewMode.rawValue, forKey: "viewMode")
             timeline.setActive(viewMode == .timeline && lanes.isEmpty, seed: filtered)
             for lane in lanes {
-                lane.feed.setActive(viewMode == .timeline, seed: entries.filter(lane.matcher))
+                lane.feed.setActive(viewMode == .timeline, seed: lastMatches(in: entries, lane.matcher))
             }
         }
     }
@@ -79,19 +118,24 @@ final class EventStore {
         didSet { UserDefaults.standard.set(timelineExpandAll, forKey: "timelineExpandAll") }
     }
 
-    var selectedEntry: LogEntry? {
-        guard let selection else { return nil }
-        // Selected rows are almost always near the end; search backwards.
-        if let e = filtered.last(where: { $0.id == selection }) { return e }
-        return entries.last(where: { $0.id == selection })
-    }
-
     private let streamer = LogStreamer()
     /// `--select-last` keeps the newest network row selected (dev/screenshot aid for the request inspector).
     private static let selectLastNetwork = CommandLine.arguments.contains("--select-last")
-    private var matcher: (LogEntry) -> Bool = { _ in true }
-    private var rateWindow: [(Date, Int)] = []
-    private var discoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var matcher: (LogEntry) -> Bool = { _ in true }
+    @ObservationIgnored private var rateWindow: [(Date, Int)] = []
+    @ObservationIgnored private var discoveryTask: Task<Void, Never>?
+    /// The launch-time discovery selects the booted simulator and honours `--record`; periodic refreshes wait for it.
+    @ObservationIgnored private var initialDiscoveryDone = false
+    /// Bumped per `refilter`; a background filter pass whose generation is stale is discarded.
+    @ObservationIgnored private var filterGeneration = 0
+    @ObservationIgnored private var filterTask: Task<Void, Never>?
+    /// True while a background pass is running (cleared when it lands or is superseded).
+    @ObservationIgnored private var filterInFlight = false
+    /// Finished proxy transactions arrive one at a time; they're coalesced like log batches (one append per ~16 ms).
+    @ObservationIgnored private var pendingNetwork: [LogEntry] = []
+    @ObservationIgnored private var networkFlushScheduled = false
+    /// Above this many entries a filter change runs off the main actor.
+    static let backgroundFilterThreshold = 20_000
 
     init() {
         let d = UserDefaults.standard
@@ -119,15 +163,18 @@ final class EventStore {
 
     // MARK: - Sources
 
-    func refreshSources(selectBooted: Bool = false) {
+    func refreshSources(selectBooted: Bool = false, includeDevices: Bool = true) {
         discoveryTask?.cancel()
         discoveryTask = Task { [weak self] in
-            let found = await SourceDiscovery.discover()
+            var found = await SourceDiscovery.discover(includeDevices: includeDevices)
             guard let self, !Task.isCancelled else { return }
-            sources = found
+            initialDiscoveryDone = true
+            // A simulator-only refresh keeps the devices the full discovery found, so the menu doesn't flap.
+            if !includeDevices { found += sources.filter { if case .physicalDevice = $0.kind { true } else { false } } }
+            if found != sources { sources = found }
             if selectBooted, let booted = found.first(where: { $0.isSimulator && $0.isBooted }) {
                 selectedSource = booted
-            } else if let updated = found.first(where: { $0.id == selectedSource.id }) {
+            } else if let updated = found.first(where: { $0.id == self.selectedSource.id }), updated != selectedSource {
                 selectedSource = updated
             }
             // `LogLens --record` starts capturing immediately (handy for scripting and dev).
@@ -146,12 +193,20 @@ final class EventStore {
         }
     }
 
+    /// Simulator list refresh: only while LogLens is the active app and not recording, and without `devicectl`
+    /// (physical devices aren't supported yet, and it's the expensive one). Idle in the background costs nothing.
     private func startSourcePolling() {
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.initialDiscoveryDone, !self.isCapturing else { return }
+                self.refreshSources(includeDevices: false)
+            }
+        }
         Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(10))
                 guard let self else { return }
-                if !isCapturing { refreshSources() }
+                if initialDiscoveryDone, !isCapturing, NSApp.isActive { refreshSources(includeDevices: false) }
             }
         }
     }
@@ -202,47 +257,86 @@ final class EventStore {
         return ([cmd.path] + quoted).joined(separator: " ")
     }
 
+    // MARK: - Lookup
+
+    /// Selected rows are almost always near the end; search backwards.
+    func entry(id: LogEntry.ID) -> LogEntry? {
+        if let e = filtered.last(where: { $0.id == id }) { return e }
+        return entries.last(where: { $0.id == id })
+    }
+
     // MARK: - Data mutation
 
     /// Network proxy transactions join the same stream as log events (they carry `isNetwork`).
-    func appendNetwork(_ tx: NetworkTransaction) {
-        append([LogEntry.network(tx)])
+    /// The entry is built off the main thread by the proxy (body decode + pretty-print are not cheap).
+    func appendNetwork(_ entry: LogEntry) {
+        pendingNetwork.append(entry)
+        guard !networkFlushScheduled else { return }
+        networkFlushScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(16))
+            guard let self else { return }
+            networkFlushScheduled = false
+            let batch = pendingNetwork
+            pendingNetwork.removeAll(keepingCapacity: true)
+            append(batch)
+        }
     }
 
     private func append(_ batch: [LogEntry]) {
         guard !batch.isEmpty else { return }
-        totalReceived += batch.count
-        entries.append(contentsOf: batch)
-        for e in batch {
-            processCounts[e.process, default: 0] += 1
-            subsystemCounts[e.subsystem, default: 0] += 1
-            categoryCounts[e.category, default: 0] += 1
+        Perf.measure("store.append") {
+            totalReceived += batch.count
+            entries.append(contentsOf: batch)
+            for e in batch {
+                processCounts[e.process, default: 0] += 1
+                subsystemCounts[e.subsystem, default: 0] += 1
+                categoryCounts[e.category, default: 0] += 1
+            }
+            markFacetsDirty()
+            let matches = batch.filter(matcher)
+            if !matches.isEmpty {
+                filtered.append(contentsOf: matches)
+                timeline.ingest(matches)
+            }
+            for lane in lanes {
+                let laneMatches = batch.filter(lane.matcher)
+                if !laneMatches.isEmpty { lane.feed.ingest(laneMatches) }
+            }
+            if Self.selectLastNetwork, let last = batch.last(where: { $0.isNetwork && $0.network?.isTunnel == false }) { selection = last.id }
+            trimIfNeeded()
+            updateRate(added: batch.count)
         }
-        let matches = batch.filter(matcher)
-        if !matches.isEmpty {
-            filtered.append(contentsOf: matches)
-            timeline.ingest(matches)
-        }
-        for lane in lanes { lane.feed.ingest(batch.filter(lane.matcher)) }
-        if Self.selectLastNetwork, let last = batch.last(where: { $0.isNetwork && $0.network?.isTunnel == false }) { selection = last.id }
-        trimIfNeeded()
-        updateRate(added: batch.count)
     }
 
+    /// Trim with hysteresis: shifting a 100 k array is ~ms on the main thread, so do it once per ~10 % of the
+    /// buffer rather than on every batch once the buffer is full.
     private func trimIfNeeded() {
         guard entries.count > maxEntries else { return }
-        let overflow = entries.count - maxEntries
-        let removed = entries.prefix(overflow)
-        for e in removed {
-            decrement(&processCounts, e.process)
-            decrement(&subsystemCounts, e.subsystem)
-            decrement(&categoryCounts, e.category)
-            starred.remove(e.id)
-        }
-        entries.removeFirst(overflow)
-        if let firstID = entries.first?.id {
-            let drop = filtered.firstIndex { $0.id >= firstID } ?? filtered.count
-            if drop > 0 { filtered.removeFirst(drop) }
+        Perf.measure("store.trim") {
+            let slack = max(500, maxEntries / 10)
+            let overflow = entries.count - (maxEntries - slack)
+            var removedIDs = Set<Int>(minimumCapacity: overflow)
+            for e in entries.prefix(overflow) {
+                decrement(&processCounts, e.process)
+                decrement(&subsystemCounts, e.subsystem)
+                decrement(&categoryCounts, e.category)
+                starred.remove(e.id)
+                removedIDs.insert(e.id)
+            }
+            entries.removeFirst(overflow)
+            // `filtered` is a subsequence of `entries`, so what was removed is a prefix of it too.
+            // (Match by id: network entries carry ids from their own range, so ids aren't monotonic.)
+            let drop = filtered.prefix { removedIDs.contains($0.id) }.count
+            if drop > 0 {
+                filtered.removeFirst(drop)
+                filteredRevision += 1
+            }
+            if let sel = selection, removedIDs.contains(sel) { selection = nil }
+            markFacetsDirty()
+            // A background filter pass splices in `entries[snapshotCount...]` when it lands; the trim just shifted
+            // those indices, so restart it (trims happen once per ~10 % of the buffer, so this is rare).
+            if filterInFlight { refilter() }
         }
     }
 
@@ -255,15 +349,61 @@ final class EventStore {
         let now = Date()
         rateWindow.append((now, added))
         rateWindow.removeAll { now.timeIntervalSince($0.0) > 1 }
-        eventsPerSecond = rateWindow.reduce(0) { $0 + $1.1 }
+        let rate = rateWindow.reduce(0) { $0 + $1.1 }
+        if rate != eventsPerSecond { eventsPerSecond = rate }
+    }
+
+    // MARK: - Facets (sidebar)
+
+    private func markFacetsDirty() {
+        facetsDirty = true
+        if facets.processes.isEmpty && facets.subsystems.isEmpty && facets.categories.isEmpty {
+            publishFacets()   // first events: show the sidebar right away
+            return
+        }
+        guard !facetPublishScheduled else { return }
+        facetPublishScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self else { return }
+            facetPublishScheduled = false
+            publishFacets()
+        }
+    }
+
+    private func publishFacets() {
+        guard facetsDirty else { return }
+        facetsDirty = false
+        Perf.measure("store.facets") {
+            let snapshot = FacetSnapshot(
+                processes: Self.sorted(processCounts),
+                subsystems: Self.sorted(subsystemCounts),
+                categories: Self.sorted(categoryCounts)
+            )
+            if snapshot != facets { facets = snapshot }
+        }
+    }
+
+    private static func sorted(_ counts: [String: Int]) -> [FacetSnapshot.Count] {
+        counts.map { FacetSnapshot.Count(key: $0.key, count: $0.value) }.sorted {
+            if $0.count != $1.count { return $0.count > $1.count }
+            return $0.key < $1.key
+        }
     }
 
     func clear() {
+        filterTask?.cancel()
+        filterInFlight = false
+        filterGeneration += 1
         entries.removeAll(keepingCapacity: true)
         filtered.removeAll(keepingCapacity: true)
+        filteredRevision += 1
+        appliedFilter = (filter, captureNetwork)
         processCounts.removeAll()
         subsystemCounts.removeAll()
         categoryCounts.removeAll()
+        facetsDirty = true
+        publishFacets()
         starred.removeAll()
         selection = nil
         rateWindow.removeAll()
@@ -279,8 +419,9 @@ final class EventStore {
         var f = filter
         change(&f)
         guard f != filter else { return }
+        let old = filter
         filter = f
-        refilter()
+        refilter(previous: old)
     }
 
     func resetFilter() { updateFilter { $0 = LogFilter() } }
@@ -317,14 +458,94 @@ final class EventStore {
         return { e in (showNetwork || !e.isNetwork) && base(e) }
     }
 
-    private func refilter() {
-        matcher = makeMatcher(filter)
-        filtered = filter.isActive ? entries.filter(matcher) : entries
-        timeline.reset(seed: filtered)
-        for lane in lanes {
-            lane.matcher = laneMatcher(lane)
-            lane.feed.reset(seed: entries.filter(lane.matcher))
+    /// The last `n` entries matching `m`, scanning backwards (the timeline only ever shows the newest cap).
+    nonisolated private static func lastMatches(_ n: Int = TimelineFeed.maxVisible, in source: [LogEntry], _ m: (LogEntry) -> Bool) -> [LogEntry] {
+        var out: [LogEntry] = []
+        out.reserveCapacity(n)
+        for e in source.reversed() where m(e) {
+            out.append(e)
+            if out.count == n { break }
         }
+        return out.reversed()
+    }
+
+    private func lastMatches(in source: [LogEntry], _ m: (LogEntry) -> Bool) -> [LogEntry] {
+        Self.lastMatches(in: source, m)
+    }
+
+    /// Rebuilds `filtered` and every timeline feed for the current filter.
+    ///
+    /// Small buffers filter synchronously. Large ones run the pass off the main actor: new batches keep landing
+    /// (matched with the new matcher, appended to the stale `filtered`) and the finished result replaces
+    /// `filtered` plus whatever arrived meanwhile. Typing one more character into a non-empty search narrows the
+    /// previous result instead of rescanning everything.
+    private func refilter(previous: LogFilter? = nil) {
+        filterTask?.cancel()
+        filterInFlight = false
+        filterGeneration += 1
+        let generation = filterGeneration
+        matcher = makeMatcher(filter)
+        for lane in lanes { lane.matcher = laneMatcher(lane) }
+        let target = (filter: filter, showNetwork: captureNetwork)
+
+        // Fast paths.
+        if !filter.isActive && captureNetwork {
+            filtered = entries
+            filteredRevision += 1
+            appliedFilter = target
+            reseedFeeds()
+            return
+        }
+        // Typing one more character: narrow the current result — but only if it really is the previous filter's.
+        let narrowing: Bool = {
+            guard let a = appliedFilter, a.showNetwork == captureNetwork, !a.filter.searchText.isEmpty,
+                  filter.searchText.hasPrefix(a.filter.searchText) else { return false }
+            var q = filter; q.searchText = a.filter.searchText
+            return q == a.filter
+        }()
+        let source = narrowing ? filtered : entries
+        if source.count <= Self.backgroundFilterThreshold {
+            Perf.measure("store.refilter.sync") {
+                filtered = source.filter(matcher)
+                filteredRevision += 1
+                appliedFilter = target
+                reseedFeeds()
+            }
+            return
+        }
+        filterInFlight = true
+
+        let snapshotCount = entries.count
+        let m = matcher
+        let laneMatchers = lanes.map(\.matcher)
+        let laneCap = TimelineFeed.maxVisible
+        filterTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let result = Perf.measure("store.refilter.background") { () -> ([LogEntry], [[LogEntry]]) in
+                let f = source.filter(m)
+                let seeds = laneMatchers.map { Self.lastMatches(laneCap, in: source, $0) }
+                return (f, seeds)
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self, generation == self.filterGeneration else { return }
+                filterInFlight = false
+                filterTask = nil
+                // Entries that arrived while we were filtering.
+                let tail = entries.count > snapshotCount ? Array(entries[snapshotCount...]) : []
+                filtered = result.0 + tail.filter(m)
+                filteredRevision += 1
+                appliedFilter = target
+                timeline.reset(seed: filtered)
+                for (lane, seed) in zip(lanes, result.1) {
+                    lane.feed.reset(seed: seed + tail.filter(lane.matcher))
+                }
+            }
+        }
+    }
+
+    private func reseedFeeds() {
+        timeline.reset(seed: filtered)
+        for lane in lanes { lane.feed.reset(seed: lastMatches(in: entries, lane.matcher)) }
     }
 
     // MARK: - Timeline lanes
@@ -355,7 +576,7 @@ final class EventStore {
             viewMode = .timeline   // didSet activates every lane feed
         } else {
             for lane in lanes {
-                lane.feed.setActive(true, seed: entries.filter(lane.matcher))
+                lane.feed.setActive(true, seed: lastMatches(in: entries, lane.matcher))
             }
         }
     }
@@ -382,7 +603,7 @@ final class EventStore {
             viewMode = .timeline   // didSet activates every lane feed
         } else {
             for lane in lanes {
-                lane.feed.setActive(true, seed: entries.filter(lane.matcher))
+                lane.feed.setActive(true, seed: lastMatches(in: entries, lane.matcher))
             }
         }
     }
@@ -404,11 +625,14 @@ final class EventStore {
 
     // MARK: - Export
 
-    func exportData(onlyFiltered: Bool) -> Data {
+    /// Encodes off the main actor; 100 k pretty-printed entries take seconds.
+    func exportData(onlyFiltered: Bool) async -> Data {
         let list = onlyFiltered ? filtered : entries
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return (try? encoder.encode(list)) ?? Data()
+        return await Task.detached(priority: .userInitiated) {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            return (try? encoder.encode(list)) ?? Data()
+        }.value
     }
 }

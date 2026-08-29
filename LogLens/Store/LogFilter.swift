@@ -41,8 +41,7 @@ struct LogFilter: Equatable {
             if !subsystems.isEmpty && !subsystems.contains(e.subsystem) { return false }
             if !categories.isEmpty && !categories.contains(e.category) { return false }
             if !terms.isEmpty {
-                let hay = e.searchText
-                for t in terms where !hay.contains(t) { return false }
+                for t in terms where !e.searchKey.contains(t) { return false }
             }
             return true
         }

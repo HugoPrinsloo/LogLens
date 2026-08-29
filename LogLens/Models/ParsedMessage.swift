@@ -26,6 +26,24 @@ struct ParsedMessage: Hashable, Codable {
     var groups: [Group]
     /// Lines that weren't key/value pairs.
     var freeText: [String]
+    /// Analytics semantics ("impression", "click", "get", …) resolved once, here, for every construction site
+    /// (see `derivedEventType`); never in a render path.
+    private(set) var eventType: String? = nil
+    /// Event identifier resolved once at construction (see `derivedEID`).
+    private(set) var eid: String? = nil
+
+    init(title: String, summary: String, fields: [Field], groups: [Group], freeText: [String]) {
+        self.title = title
+        self.summary = summary
+        self.fields = fields
+        self.groups = groups
+        self.freeText = freeText
+        eventType = derivedEventType
+        eid = derivedEID
+    }
+
+    // Derived fields stay out of exports / "Copy as JSON".
+    enum CodingKeys: String, CodingKey { case title, summary, fields, groups, freeText }
 
     var isStructured: Bool { !fields.isEmpty || !groups.isEmpty }
 }

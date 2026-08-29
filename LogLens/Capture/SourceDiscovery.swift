@@ -3,12 +3,17 @@ import Foundation
 /// Finds simulators (via `simctl`) and physical devices (via `devicectl`).
 enum SourceDiscovery {
 
-    static func discover() async -> [LogSource] {
+    /// `includeDevices`: also run `devicectl` (slow, spawns CoreDevice work). Periodic refreshes skip it.
+    static func discover(includeDevices: Bool = true) async -> [LogSource] {
         async let sims = simulators()
-        async let devices = physicalDevices()
         var all: [LogSource] = [.mac]
-        all.append(contentsOf: await sims)
-        all.append(contentsOf: await devices)
+        if includeDevices {
+            async let devices = physicalDevices()
+            all.append(contentsOf: await sims)
+            all.append(contentsOf: await devices)
+        } else {
+            all.append(contentsOf: await sims)
+        }
         return all
     }
 

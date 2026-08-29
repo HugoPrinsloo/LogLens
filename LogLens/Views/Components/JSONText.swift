@@ -7,17 +7,17 @@ struct JSONText: View {
     @State private var showAll = false
 
     var body: some View {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        let capped = !showAll && lines.count > lineCap
-        let shown = capped ? lines.prefix(lineCap).joined(separator: "\n") : text
+        let rendered = JSONHighlighter.render(text, lineCap: showAll ? Int.max : lineCap)
+        let capped = rendered.lineCount > (showAll ? Int.max : lineCap)
+        let lines = rendered.lineCount
         VStack(alignment: .leading, spacing: 6) {
-            Text(JSONHighlighter.attributed(shown))
+            Text(rendered.attributed)
                 .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if capped {
-                Button("Show all \(lines.count) lines") { showAll = true }
+                Button("Show all \(lines) lines") { showAll = true }
                     .buttonStyle(.link)
                     .font(.caption)
             }
@@ -35,17 +35,40 @@ enum JSONHighlighter {
     private static let literal = Color(red: 0.98, green: 0.75, blue: 0.40) // amber
     private static let punctuation = Color.secondary
 
-    private final class Box { let value: AttributedString; init(_ v: AttributedString) { value = v } }
+    struct Rendered {
+        let attributed: AttributedString
+        let lineCount: Int
+    }
+
+    /// One entry per body text: the line count plus the highlighted text per cap (40 for cards, 60 for snapshots, all).
+    private final class Box {
+        let lineCount: Int
+        var byCap: [Int: AttributedString] = [:]
+        init(lineCount: Int) { self.lineCount = lineCount }
+    }
     private static let cache: NSCache<NSString, Box> = { let c = NSCache<NSString, Box>(); c.countLimit = 600; return c }()
 
-    /// Cached per text: cards re-render often and the pass below is O(n) over characters.
-    static func attributed(_ text: String) -> AttributedString {
+    /// Cached per text: cards re-render often and both the split and the pass below are O(n) over characters.
+    static func render(_ text: String, lineCap: Int) -> Rendered {
         let key = text as NSString
-        if let hit = cache.object(forKey: key) { return hit.value }
-        let result = highlight(text)
-        cache.setObject(Box(result), forKey: key)
-        return result
+        let box: Box
+        if let hit = cache.object(forKey: key) {
+            box = hit
+        } else {
+            var count = 1
+            for c in text.utf8 where c == 0x0A { count += 1 }
+            box = Box(lineCount: count)
+            cache.setObject(box, forKey: key)
+        }
+        let cap = box.lineCount > lineCap ? lineCap : Int.max
+        if let hit = box.byCap[cap] { return Rendered(attributed: hit, lineCount: box.lineCount) }
+        let shown = cap == Int.max ? text : text.split(separator: "\n", omittingEmptySubsequences: false).prefix(cap).joined(separator: "\n")
+        let result = highlight(shown)
+        box.byCap[cap] = result
+        return Rendered(attributed: result, lineCount: box.lineCount)
     }
+
+    static func attributed(_ text: String) -> AttributedString { render(text, lineCap: Int.max).attributed }
 
     /// Single pass over the text: strings (key vs. value decided by the next non-space char), numbers, literals, punctuation.
     private static func highlight(_ text: String) -> AttributedString {

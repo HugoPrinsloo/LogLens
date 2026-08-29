@@ -9,11 +9,13 @@ struct TimelineRow: View, Equatable {
     let item: TimelineFeed.TimelineItem
     let isFirst: Bool
     let isExpanded: Bool
+    /// Passed in (not read from the store inside the card) so starring one card doesn't re-render all 200.
+    var isStarred = false
     let toggle: () -> Void
 
     /// The closure would otherwise make every row look "changed" on each reveal, re-laying out all 200 cards.
     static func == (l: Self, r: Self) -> Bool {
-        l.item.id == r.item.id && l.isFirst == r.isFirst && l.isExpanded == r.isExpanded
+        l.item.id == r.item.id && l.isFirst == r.isFirst && l.isExpanded == r.isExpanded && l.isStarred == r.isStarred
     }
 
     var body: some View {
@@ -23,7 +25,7 @@ struct TimelineRow: View, Equatable {
                     .fill(.quaternary)
                     .frame(width: 1, height: Self.connectorHeight)
             }
-            TimelineCard(item: item, isExpanded: isExpanded, toggle: toggle)
+            TimelineCard(item: item, isExpanded: isExpanded, isStarred: isStarred, toggle: toggle)
                 .frame(maxWidth: Self.cardMaxWidth)
         }
         .frame(maxWidth: .infinity)
@@ -33,6 +35,7 @@ struct TimelineRow: View, Equatable {
 struct TimelineCard: View {
     let item: TimelineFeed.TimelineItem
     let isExpanded: Bool
+    var isStarred = false
     let toggle: () -> Void
     /// True when the card is being rendered off-screen for "Copy as Image" (no gestures, no feedback).
     var isSnapshot = false
@@ -64,9 +67,9 @@ struct TimelineCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Flat: a hairline is enough for separation, and a shadow rasterises every card through an offscreen blur.
         .background(Color(nsColor: .controlBackgroundColor), in: blobShape)
         .overlay(blobShape.stroke(.separator))
-        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
         .contentShape(blobShape)
         .overlay(alignment: .topTrailing) {
             if showCopied {
@@ -121,7 +124,7 @@ struct TimelineCard: View {
     /// Renders this card, expanded, at the timeline's card width and 2× scale (transparent background).
     @MainActor
     private func renderImage() -> NSImage? {
-        let snapshot = TimelineCard(item: item, isExpanded: true, toggle: {}, isSnapshot: true)
+        let snapshot = TimelineCard(item: item, isExpanded: true, isStarred: isStarred, toggle: {}, isSnapshot: true)
             .frame(width: TimelineRow.cardMaxWidth)
             .padding(12)   // room for the shadow
             .environment(store)
@@ -192,14 +195,14 @@ struct TimelineCard: View {
 
     private var meta: some View {
         HStack(spacing: 8) {
-            Text(Formatters.time.string(from: entry.timestamp))
+            Text(entry.timeText)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             Text(entry.process)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            if store.isStarred(entry.id) {
+            if isStarred {
                 Image(systemName: "star.fill")
                     .font(.system(size: 8))
                     .foregroundStyle(.yellow)
@@ -297,7 +300,7 @@ struct TimelineCard: View {
 
     @ViewBuilder
     private var menuItems: some View {
-        Button(store.isStarred(entry.id) ? "Unstar" : "Star") { store.toggleStar(entry.id) }
+        Button(isStarred ? "Unstar" : "Star") { store.toggleStar(entry.id) }
         Divider()
         Button(isExpanded ? "Collapse" : "Expand", action: toggle)
         Divider()
