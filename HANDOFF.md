@@ -1,6 +1,6 @@
 # LogLens — Agent Handoff
 
-_Last updated: 2026-08-30 (evening). **v1.4.1 released**: timeline auto-scroll fix — see "Timeline auto-scroll (1.4.1)" below; read it before touching `TimelineScroll`. Earlier: v1.4.0 (`d809681`, the performance pass — `docs/PERFORMANCE-AUDIT.md`), v1.3.1 (`523b915`, crash + perf fixes), v1.3.0 (`333df77`, one recording, sidebar toggles + facet search, Heal in the Network menu, Check for Updates). Release notes live in `docs/releases/<version>.md` and `release.sh` uses that file when present._
+_Last updated: 2026-08-30 (evening). **v1.4.1 released** (commit `a41319e`, https://github.com/HugoPrinsloo/LogLens/releases/tag/v1.4.1): timeline auto-scroll fix — see "Timeline auto-scroll (1.4.1)" below; read it before touching `TimelineScroll`. Earlier: v1.4.0 (`d809681`, the performance pass — `docs/PERFORMANCE-AUDIT.md`), v1.3.1 (`523b915`, crash + perf fixes), v1.3.0 (`333df77`, one recording, sidebar toggles + facet search, Heal in the Network menu, Check for Updates). Release notes live in `docs/releases/<version>.md` and `release.sh` uses that file when present._
 
 ## What this app is
 
