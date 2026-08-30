@@ -43,6 +43,8 @@ final class TimelineFeed {
     /// Groups larger than this land without the spring: nobody can follow 20 cards sliding in at once, and the
     /// animation would keep the whole stack re-laying-out for 350 ms per reveal under a flood.
     static let maxAnimatedGroup = 10
+    /// The spring cards land with; the timeline scrolls with the same curve so the pin tracks the growth.
+    static let revealAnimation: Animation = .spring(duration: 0.35, bounce: 0.15)
 
     private var queue: [LogEntry] = []
     private var drainTask: Task<Void, Never>?
@@ -99,7 +101,7 @@ final class TimelineFeed {
             queue.removeAll(keepingCapacity: true)
             setBacklog(0)
             if items.count <= Self.maxAnimatedGroup {
-                withAnimation(.spring(duration: 0.35, bounce: 0.15)) {
+                withAnimation(Self.revealAnimation) {
                     visible.append(contentsOf: items)
                 }
             } else {

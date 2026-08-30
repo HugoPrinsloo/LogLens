@@ -155,9 +155,12 @@ final class LogStreamer {
         replayData = try Data(contentsOf: URL(fileURLWithPath: path))
         replayOffset = 0
         isRunning = true
-        let perTick = max(1, Self.replayRate / 20)   // 20 ticks/s
+        // 20 ticks/s; below 20 lines/s slow the ticks down instead so low rates aren't floored at 20.
+        let rate = max(1, Self.replayRate)
+        let perTick = max(1, rate / 20)
+        let interval = rate >= 20 ? 50 : 1000 / rate
         let timer = DispatchSource.makeTimerSource(queue: parseQueue)
-        timer.schedule(deadline: .now(), repeating: .milliseconds(50))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(interval))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             var lines = 0

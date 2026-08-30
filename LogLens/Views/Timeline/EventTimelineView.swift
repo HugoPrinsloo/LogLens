@@ -75,10 +75,12 @@ struct TimelineScroll: View {
     /// While capturing, follow the incoming stub so the pulse stays in view;
     /// otherwise pin to the newest card.
     private func scrollToNewest(_ proxy: ScrollViewProxy) {
-        if store.isCapturing {
-            proxy.scrollTo(Self.incomingID, anchor: .bottom)
-        } else if let last = feed.visible.last {
-            proxy.scrollTo(last.id, anchor: .bottom)
+        withAnimation(TimelineFeed.revealAnimation) {
+            if store.isCapturing {
+                proxy.scrollTo(Self.incomingID, anchor: .bottom)
+            } else if let last = feed.visible.last {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
         }
     }
 
@@ -109,22 +111,28 @@ struct TimelineScroll: View {
                     }
                     if store.isCapturing {
                         IncomingIndicator(feed: feed)
+                            .padding(.bottom, 24)
                             .id(Self.incomingID)
                     }
                 }
                 .padding(.horizontal, horizontalPadding)
-                .padding(.vertical, 24)
+                .padding(.top, 24)
             }
-            // Pinned to the newest event. While auto-scroll is on the scroll view itself keeps the bottom anchored as
-            // content grows, which is far cheaper than a `scrollTo` per reveal (that forced a full layout of every card).
             .defaultScrollAnchor(.bottom)
-            .defaultScrollAnchor(store.autoScroll ? .bottom : nil, for: .sizeChanges)
             .overlay {
                 if feed.visible.isEmpty, !store.isCapturing {
                     Text("No matching events")
                         .font(.callout)
                         .foregroundStyle(.tertiary)
                 }
+            }
+            // Pinned to the newest event by scrolling to the incoming stub on every reveal. Targeting an id
+            // resolves against the layout the reveal produces, so the scroll animates in step with the cards
+            // growing; scrolling to the bottom *edge* or relying on `defaultScrollAnchor(for: .sizeChanges)`
+            // both measure the content before the spring has finished and land short.
+            .onChange(of: feed.visible.last?.id) { _, _ in
+                guard store.autoScroll else { return }
+                scrollToNewest(proxy)
             }
             .onChange(of: store.autoScroll) { _, on in
                 guard on, feed.visible.last != nil else { return }
