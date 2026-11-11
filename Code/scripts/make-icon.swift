@@ -1,5 +1,5 @@
 // Renders the LogLens app icon (pre-macOS 26 fallback) from the Liquid Glass layer SVGs in AppIcon.icon.
-// Run: swift scripts/make-icon.swift
+// Run from Code/: swift scripts/make-icon.swift
 import AppKit
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -42,5 +42,5 @@ for (pt, scale) in sizes {
 }
 let contents: [String: Any] = ["images": images, "info": ["author": "xcode", "version": 1]]
 try! JSONSerialization.data(withJSONObject: contents, options: [.prettyPrinted, .sortedKeys]).write(to: outDir.appendingPathComponent("Contents.json"))
-try! render(1024).write(to: root.appendingPathComponent("docs/icon-preview.png"))
+try! render(1024).write(to: root.appendingPathComponent("../Docs/icon-preview.png"))
 print("wrote \(images.count) icons")

@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Builds a Developer ID-signed, notarized, stapled LogLens release (zip + dmg) and publishes it on GitHub.
-# Release notes: docs/releases/<version>.md if present, otherwise GitHub's generated notes.
+# Release notes: Docs/releases/<version>.md if present, otherwise GitHub's generated notes.
 #
 # Usage: scripts/release.sh <version>              e.g. scripts/release.sh 1.2.0
 #        scripts/release.sh <version> --no-publish  build and notarize only
@@ -105,8 +105,8 @@ step "Committing version bump and publishing GitHub release v$VERSION"
 git add project.yml LogLens.xcodeproj
 git commit -qm "Release v$VERSION" || true
 git push -q
-# Hand-written notes in docs/releases/<version>.md win over GitHub's generated list of commits.
-NOTES="docs/releases/$VERSION.md"
+# Hand-written notes in Docs/releases/<version>.md win over GitHub's generated list of commits.
+NOTES="../Docs/releases/$VERSION.md"
 if [[ -f "$NOTES" ]]; then
   gh release create "v$VERSION" "$DMG" "$ZIP" "$DIST_DIR/LogLens-$VERSION.sha256" \
     --title "LogLens $VERSION" --notes-file "$NOTES"

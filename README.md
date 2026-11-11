@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon-preview.png" alt="LogLens icon" width="180">
+  <img src="Docs/icon-preview.png" alt="LogLens icon" width="180">
 </p>
 
 <h1 align="center">LogLens</h1>
@@ -15,7 +15,7 @@
 
 Pick a simulator, press Record, and every `os.Logger` message shows up in a table you can filter by app, subsystem, category, level, or plain text. Click a row and the inspector splits the message into its fields. Switch to the timeline and the same events arrive as cards. Pressing Record also starts a local proxy, so the app's HTTP requests show up in the same list, decrypted, with headers and bodies, without touching the app.
 
-![LogLens capturing events from an iOS simulator](docs/layout.png)
+![LogLens capturing events from an iOS simulator](Docs/layout.png)
 
 ## Why this exists
 
@@ -37,19 +37,19 @@ The project file is generated with [xcodegen](https://github.com/yonaskolb/Xcode
 ```
 brew install xcodegen
 git clone git@github.com:HugoPrinsloo/LogLens.git
-cd LogLens
+cd LogLens/Code
 xcodegen generate
 open LogLens.xcodeproj
 ```
 
-Then hit Run. If you'd rather stay in the terminal:
+Then hit Run. If you'd rather stay in the terminal (from `Code/`):
 
 ```
 xcodebuild -project LogLens.xcodeproj -scheme LogLens -configuration Debug -derivedDataPath build build
 open build/Build/Products/Debug/LogLens.app
 ```
 
-The generated `LogLens.xcodeproj` is checked in, so you only need to run `xcodegen generate` again after editing `project.yml`.
+The generated `Code/LogLens.xcodeproj` is checked in, so you only need to run `xcodegen generate` again after editing `project.yml`.
 
 ## Using it
 
@@ -89,7 +89,7 @@ This is the part I originally wanted Proxyman for. There is one Record button, a
 
 In the timeline, a POST to the analytics endpoint lands right after the event that caused it, with the payload in a syntax coloured box, which is the thing I actually wanted to see. The Network menu in the toolbar turns HTTP(S) capture off if it gets in the way, and "Network" is a subsystem in the sidebar so you can filter requests in or out like anything else.
 
-![A network request rendered as a timeline card](docs/network-card.png)
+![A network request rendered as a timeline card](Docs/network-card.png)
 
 Only simulator processes are decrypted by default. The rest of the Mac's traffic still passes through the proxy while capturing, but untouched, so Safari and Slack keep working and you never have to trust the certificate on the Mac. If you do want Mac traffic, Settings has a switch for it, and that one needs the certificate trusted in your login keychain.
 
@@ -150,7 +150,7 @@ xcrun notarytool store-credentials "LogLens-Notary" --apple-id you@example.com -
 Then, from a clean working tree:
 
 ```
-scripts/release.sh 1.2.0
+cd Code && ./scripts/release.sh 1.2.0
 ```
 
 That sets the version in `project.yml`, archives a Release build, exports it with the Developer ID, notarizes and staples the app, wraps it in a `.dmg` (notarized too), commits the bump, and publishes a GitHub release with the dmg, a zip, and their SHA-256s. Add `--no-publish` to stop after building.
@@ -158,19 +158,20 @@ That sets the version in `project.yml`, archives a Release build, exports it wit
 ## Project layout
 
 ```
-LogLens/
-  App/        LogLensApp: scene, menus, shortcuts
-  Capture/    LogSource, SourceDiscovery (simctl, devicectl), LogStreamer (log stream to LogEntry)
-  Network/    ProxyServer (SwiftNIO), CertificateAuthority, SystemProxy, SimulatorTrust, ProcessLookup, BodyDecoder
-  Parsing/    MessageParser, SwiftDescriptionParser
-  Models/     LogEntry, LogLevel, ParsedMessage, NetworkTransaction, NetworkLogEntry
-  Store/      EventStore, NetworkStore (@Observable), LogFilter, TimelineFeed, TimelineLane
-  Views/      ContentView, Sidebar, Table, Timeline, Network (request inspector), Detail, Settings
-  Support/    Formatters, ExportDocument, Pasteboard
-  Resources/  AppIcon.icon (Liquid Glass layers) and the PNG fallback catalog
-scripts/
-  make-icon.swift      renders the PNG icon set from the .icon layers
-  release.sh           build, sign, notarize, publish (dmg + zip)
+Code/
+  LogLens/
+    App/        LogLensApp: scene, menus, shortcuts
+    Capture/    LogSource, SourceDiscovery (simctl, devicectl), LogStreamer (log stream to LogEntry)
+    Network/    ProxyServer (SwiftNIO), CertificateAuthority, SystemProxy, SimulatorTrust, ProcessLookup, BodyDecoder
+    Parsing/    MessageParser, SwiftDescriptionParser
+    Models/     LogEntry, LogLevel, ParsedMessage, NetworkTransaction, NetworkLogEntry
+    Store/      EventStore, NetworkStore (@Observable), LogFilter, TimelineFeed, TimelineLane
+    Views/      ContentView, Sidebar, Table, Timeline, Network (request inspector), Detail, Settings
+    Support/    Formatters, ExportDocument, Pasteboard
+    Resources/  AppIcon.icon (Liquid Glass layers) and the PNG fallback catalog
+  scripts/
+    make-icon.swift      renders the PNG icon set from the .icon layers
+    release.sh           build, sign, notarize, publish (dmg + zip)
 ```
 
 ## License
